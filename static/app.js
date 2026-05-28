@@ -99,17 +99,31 @@ async function saveCaps() {
   setTimeout(()=>$('capInfo').textContent='', 3000);
 }
 
-// ── Fetch realtime price ───────────────────────────────────
+// ── Fetch giá tham chiếu hôm nay (sstock.vn qua corsproxy) ─
+// BasicPrice trả về đơn vị nghìn đồng, nhân 1000 để ra đồng.
 async function fetchPrice(sym) {
   if (!sym) return null;
   sym = sym.toUpperCase().trim();
+  if (STATE.prices[sym]) return STATE.prices[sym];
+  const upstream = `https://api-feature.sstock.vn/api/v1/prices/realtime?symbol=${sym}`;
+  const url = `https://corsproxy.io/?url=${encodeURIComponent(upstream)}`;
   try {
-    const r = await fetch(`/api/price/${sym}`); const d = await r.json();
-    if (d.ok && d.price) {
-      STATE.prices[sym] = { price: d.price * 1, change: d.change, changePct: d.changePct };
+    const r = await fetch(url);
+    const d = await r.json();
+    const bp = d?.data?.BasicPrice;
+    if (bp) {
+      const price = bp * 1000;
+      STATE.prices[sym] = {
+        price,
+        ref: price,
+        current: (d.data.CurrentPrice || d.data.MatchedPrice || bp) * 1000,
+        ceil: (d.data.CeilPrice || 0) * 1000,
+        floor: (d.data.FlrPrice || 0) * 1000,
+        change: 0, changePct: 0,
+      };
       return STATE.prices[sym];
     }
-  } catch(e) {}
+  } catch(e) { console.warn('fetchPrice', sym, e); }
   return null;
 }
 
@@ -327,7 +341,7 @@ async function onBuySymBlur() {
   const sym = $('bSym').value.toUpperCase().trim();
   if (sym) {
     const p = await fetchPrice(sym);
-    if (p) { setNumVal($('bPrice'), p.price); $('bPriceNote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
+    if (p) { setNumVal($('bPrice'), p.price); $('bPriceNote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   }
   recalcAll();
 }
@@ -390,9 +404,9 @@ async function onDealSymBlur(e) {
   if (!sym) return;
   const p = await fetchPrice(sym);
   if (!p) return;
-  if (id === 'd1Sym') { setNumVal($('d1P'), p.price); $('d1Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
-  if (id === 'd2Sym') { setNumVal($('d2P'), p.price); $('d2Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
-  if (id === 'd3Sym') { setNumVal($('d3P'), p.price); $('d3Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
+  if (id === 'd1Sym') { setNumVal($('d1P'), p.price); $('d1Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
+  if (id === 'd2Sym') { setNumVal($('d2P'), p.price); $('d2Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
+  if (id === 'd3Sym') { setNumVal($('d3P'), p.price); $('d3Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   // Auto-fill r from master
   const r = getR(sym);
   $('dR').value = r;
@@ -579,10 +593,30 @@ $('btnClearRows').onclick = () => {
   recalcAll();
 };
 
+// Prefetch giá tham chiếu cho các ô mặc định (Deal 1/2/3, Sức mua)
+async function prefetchDefaultPrices() {
+  const targets = [
+    { symId: 'd1Sym', priceId: 'd1P', noteId: 'd1Pnote' },
+    { symId: 'd2Sym', priceId: 'd2P', noteId: 'd2Pnote' },
+    { symId: 'd3Sym', priceId: 'd3P', noteId: 'd3Pnote' },
+    { symId: 'bSym',  priceId: 'bPrice', noteId: 'bPriceNote' },
+  ];
+  await Promise.all(targets.map(async t => {
+    const sym = $(t.symId)?.value?.toUpperCase().trim();
+    if (!sym) return;
+    const p = await fetchPrice(sym);
+    if (!p) return;
+    setNumVal($(t.priceId), p.price);
+    if (t.noteId && $(t.noteId)) $(t.noteId).textContent = `Giá tham chiếu: ${fmtVND(p.price)}`;
+  }));
+  recalcAll();
+}
+
 // ── Init ───────────────────────────────────────────────────
 (async () => {
   await loadMaster();
   await loadCaps();
   initHoldingsTable();
   recalcAll();
+  prefetchDefaultPrices();
 })();

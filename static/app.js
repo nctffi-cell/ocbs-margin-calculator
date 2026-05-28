@@ -267,6 +267,7 @@ function recalcAll() {
   const V = totMV + cash;
   const E = V - D;
   const rtt = V > 0 ? E / V : 0;
+  STATE.account = { V, D, E, rtt, cash, totMV };
   const room = totDmax - D;
 
   // Tab 1 outputs
@@ -482,6 +483,14 @@ function recalcDeals() {
   $('d4Cash').textContent = fmtVND(cash4);
   $('d4Debt').textContent = fmtVND(debt4);
   $('d4Rem').textContent  = fmtVND(Math.max(0, X4 - cash4));
+  // Rtt sau khi mua = (V_sau − D_sau) / V_sau, cộng dồn với danh mục Tab 1.
+  // Giả định: cash4 lấy từ tiền nộp X (không trừ vào aCash hiện tại); stocks tăng V_real, debt tăng debt4.
+  const acc = STATE.account || { V:0, D:0 };
+  const Vafter4 = acc.V + Vreal4;        // danh mục tăng V_real
+  const Dafter4 = acc.D + debt4;          // nợ tăng debt4
+  $('d4Rtt').textContent = (Vafter4 > 0 && N4 > 0)
+    ? fmtPct((Vafter4 - Dafter4) / Vafter4)
+    : '—';
 }
 
 // ── Tab 5: Caps editor ─────────────────────────────────────

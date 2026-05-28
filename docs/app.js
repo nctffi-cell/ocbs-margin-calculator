@@ -413,6 +413,7 @@ async function onDealSymBlur(e) {
   if (id === 'd1Sym') { setNumVal($('d1P'), p.price); $('d1Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   if (id === 'd2Sym') { setNumVal($('d2P'), p.price); $('d2Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   if (id === 'd3Sym') { setNumVal($('d3P'), p.price); $('d3Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
+  if (id === 'd4Sym') { setNumVal($('d4P'), p.price); $('d4Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   // Auto-fill r from master
   const r = getR(sym);
   $('dR').value = r;
@@ -461,6 +462,22 @@ function recalcDeals() {
   $('d3N').textContent    = fmtNum(N3);
   $('d3Cash').textContent = fmtVND(X3 * (1 - fs));
   $('d3Debt').textContent = fmtVND(X3 * (1 + fb));
+
+  // Deal 4: Nộp X tiền mặt → mua tối đa N cp mã Y với giá P
+  // V_mua = X / (1 + fb − rp), N = floor(V_mua / P / 100) × 100
+  const X4 = getNumVal('d4X'), P4 = getNumVal('d4P');
+  const denom4 = 1 + fb - rp;
+  const Vmax4 = (denom4 > 0) ? X4 / denom4 : 0;
+  const N4 = (P4 > 0) ? Math.floor(Vmax4 / P4 / 100) * 100 : 0;
+  const Vreal4 = N4 * P4;
+  const cash4  = Vreal4 * denom4;
+  const debt4  = Vreal4 * rp;
+  $('d4V').textContent    = fmtVND(Vmax4);
+  $('d4N').textContent    = fmtNum(N4);
+  $('d4Vreal').textContent= fmtVND(Vreal4);
+  $('d4Cash').textContent = fmtVND(cash4);
+  $('d4Debt').textContent = fmtVND(debt4);
+  $('d4Rem').textContent  = fmtVND(Math.max(0, X4 - cash4));
 }
 
 // ── Tab 5: Caps editor ─────────────────────────────────────
@@ -574,10 +591,10 @@ $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
 ['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant',
- 'dR','dRtt','d1N','d1P','d2Y','d2P','d3Z','d3P']
+ 'dR','dRtt','d1N','d1P','d2Y','d2P','d3Z','d3P','d4X','d4P']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 
-['d1Sym','d2Sym','d3Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
+['d1Sym','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
 $('bSym').addEventListener('change', onBuySymBlur);
 
 $('btnRefreshAll').onclick = async () => {
@@ -608,6 +625,7 @@ async function prefetchDefaultPrices() {
     { symId: 'd1Sym', priceId: 'd1P', noteId: 'd1Pnote' },
     { symId: 'd2Sym', priceId: 'd2P', noteId: 'd2Pnote' },
     { symId: 'd3Sym', priceId: 'd3P', noteId: 'd3Pnote' },
+    { symId: 'd4Sym', priceId: 'd4P', noteId: 'd4Pnote' },
     { symId: 'bSym',  priceId: 'bPrice', noteId: 'bPriceNote' },
   ];
   await Promise.all(targets.map(async t => {

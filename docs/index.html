@@ -16,7 +16,7 @@
   <div class="tab active" data-tab="rtt">🧮 Rtt & Danh mục</div>
   <div class="tab" data-tab="viphm">⚠️ Xử lý vi phạm</div>
   <div class="tab" data-tab="sucmua">💰 Sức mua & Mua CP</div>
-  <div class="tab" data-tab="deals">🔁 3 Deals</div>
+  <div class="tab" data-tab="deals">🔁 4 Deals</div>
   <div class="tab" data-tab="caps">⚙️ Giá chặn</div>
 </nav>
 
@@ -224,6 +224,19 @@
       <div class="row"><label>Tiền rút tương ứng</label><div class="calc" id="d3Cash">0</div><span></span></div>
       <div class="row"><label>Dư nợ thực tế</label><div class="calc" id="d3Debt">0</div><span></span></div>
     </div>
+
+    <div class="card">
+      <div class="card-header deal">▶ DEAL 4: Nộp X đồng tiền mặt → MUA TỐI ĐA bao nhiêu CP mã Y?</div>
+      <div class="row"><label>Mã CK</label><input id="d4Sym" type="text" value="MWG"><span></span></div>
+      <div class="row"><label>Số tiền nộp X (đ)</label><input id="d4X" type="text" inputmode="numeric" data-num value="1000000000"><span class="note">Tiền mặt anh bỏ ra</span></div>
+      <div class="row"><label>Giá CP (đ)</label><input id="d4P" type="text" inputmode="numeric" data-num value="86000"><span class="note" id="d4Pnote"></span></div>
+      <div class="row"><label>V mua tối đa</label><div class="calc" id="d4V">0</div><span class="note">= X / (1 + f_b − r')</span></div>
+      <div class="row"><label><b>▶ SỐ CP MUA TỐI ĐA</b></label><div class="calc star" id="d4N">0</div><span class="note">làm tròn xuống bội 100</span></div>
+      <div class="row"><label>V mua thực tế</label><div class="calc" id="d4Vreal">0</div><span class="note">= N × P</span></div>
+      <div class="row"><label>Tiền mặt thực dùng</label><div class="calc" id="d4Cash">0</div><span class="note">= V_real·(1+f_b−r')</span></div>
+      <div class="row"><label>Dư nợ phát sinh</label><div class="calc" id="d4Debt">0</div><span class="note">= V_real · r'</span></div>
+      <div class="row"><label>Tiền dư (chưa dùng)</label><div class="calc" id="d4Rem">0</div><span class="note">= X − tiền thực dùng</span></div>
+    </div>
   </section>
 
   <!-- ========================= TAB 5: Giá chặn ========================= -->
@@ -275,6 +288,6 @@
 
 </div>
 
-<script src="app.js?v=20260528-2246"></script>
+<script src="app.js?v=20260528-2316"></script>
 </body>
 </html>

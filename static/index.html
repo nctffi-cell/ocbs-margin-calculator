@@ -149,7 +149,7 @@
     <div class="card">
       <div class="card-header">II. MUA THÊM CP TỪ ROOM HIỆN TẠI</div>
       <div class="row"><label>Mã CK muốn mua</label><input id="bSym" type="text" placeholder="VD: HPG"><span class="note">Tự tra T.lệ margin</span></div>
-      <div class="row"><label>Giá đặt mua (đ)</label><input id="bPrice" type="number" value="0"><span class="note" id="bPriceNote"></span></div>
+      <div class="row"><label>Giá đặt mua (đ)</label><input id="bPrice" type="text" inputmode="numeric" data-num value="0"><span class="note" id="bPriceNote"></span></div>
       <div class="row"><label>T.lệ Margin CP này</label><div class="calc" id="bR">0%</div><span class="note">Auto từ master list</span></div>
       <div class="row"><label>Sức mua từ Room</label><div class="calc" id="bBpRoom">0</div><span class="note">= Room / T.lệ Margin</span></div>
       <div class="row"><label>Sức mua từ Cash</label><div class="calc" id="bBpCash">0</div><span class="note">= M / (1−T.lệ)</span></div>
@@ -193,8 +193,8 @@
     <div class="card">
       <div class="card-header deal">▶ DEAL 1: Lưu ký N cp → RÚT TỐI ĐA bao nhiêu?</div>
       <div class="row"><label>Mã CK</label><input id="d1Sym" type="text" value="MWG"><span class="note">Tham khảo</span></div>
-      <div class="row"><label>Số CP lưu ký (N)</label><input id="d1N" type="number" value="1000000"><span></span></div>
-      <div class="row"><label>Giá CP (đ)</label><input id="d1P" type="number" value="86000"><span class="note" id="d1Pnote"></span></div>
+      <div class="row"><label>Số CP lưu ký (N)</label><input id="d1N" type="text" inputmode="numeric" data-num value="1000000"><span></span></div>
+      <div class="row"><label>Giá CP (đ)</label><input id="d1P" type="text" inputmode="numeric" data-num value="86000"><span class="note" id="d1Pnote"></span></div>
       <div class="row"><label>V = N × P</label><div class="calc" id="d1V">0</div><span></span></div>
       <div class="row"><label>GT lệnh mua/bán</label><div class="calc" id="d1X">0</div><span class="note">= V·r'/(1+f_b)</span></div>
       <div class="row"><label><b>▶ TIỀN RÚT TỐI ĐA</b></label><div class="calc star" id="d1Cash">0</div><span class="note">= X·(1−f_s)</span></div>
@@ -205,8 +205,8 @@
     <div class="card">
       <div class="card-header deal">▶ DEAL 2: Cần RÚT Y đồng → LƯU KÝ bao nhiêu CP?</div>
       <div class="row"><label>Mã CK</label><input id="d2Sym" type="text" value="MWG"><span></span></div>
-      <div class="row"><label>Số tiền cần rút Y (đ)</label><input id="d2Y" type="number" value="10000000000"><span></span></div>
-      <div class="row"><label>Giá CP (đ)</label><input id="d2P" type="number" value="86000"><span class="note" id="d2Pnote"></span></div>
+      <div class="row"><label>Số tiền cần rút Y (đ)</label><input id="d2Y" type="text" inputmode="numeric" data-num value="10000000000"><span></span></div>
+      <div class="row"><label>Giá CP (đ)</label><input id="d2P" type="text" inputmode="numeric" data-num value="86000"><span class="note" id="d2Pnote"></span></div>
       <div class="row"><label>V cần</label><div class="calc" id="d2V">0</div><span class="note">= Y·(1+f_b)/[r'·(1−f_s)]</span></div>
       <div class="row"><label><b>▶ SỐ CP CẦN LƯU KÝ</b></label><div class="calc star" id="d2N">0</div><span class="note">làm tròn lên 100</span></div>
       <div class="row"><label>V thực tế</label><div class="calc" id="d2Vreal">0</div><span></span></div>
@@ -217,8 +217,8 @@
     <div class="card">
       <div class="card-header deal">▶ DEAL 3: Cần DƯ NỢ Z đồng → LƯU KÝ bao nhiêu CP?</div>
       <div class="row"><label>Mã CK</label><input id="d3Sym" type="text" value="MWG"><span></span></div>
-      <div class="row"><label>Dư nợ mong muốn Z (đ)</label><input id="d3Z" type="number" value="50000000000"><span></span></div>
-      <div class="row"><label>Giá CP (đ)</label><input id="d3P" type="number" value="86000"><span class="note" id="d3Pnote"></span></div>
+      <div class="row"><label>Dư nợ mong muốn Z (đ)</label><input id="d3Z" type="text" inputmode="numeric" data-num value="50000000000"><span></span></div>
+      <div class="row"><label>Giá CP (đ)</label><input id="d3P" type="text" inputmode="numeric" data-num value="86000"><span class="note" id="d3Pnote"></span></div>
       <div class="row"><label>V cần</label><div class="calc" id="d3V">0</div><span class="note">= Z / r'</span></div>
       <div class="row"><label><b>▶ SỐ CP CẦN LƯU KÝ</b></label><div class="calc star" id="d3N">0</div><span></span></div>
       <div class="row"><label>Tiền rút tương ứng</label><div class="calc" id="d3Cash">0</div><span></span></div>

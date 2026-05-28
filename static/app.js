@@ -18,6 +18,54 @@ const fmtNum = n => (n==null || isNaN(n)) ? '—' : Math.round(n).toLocaleString
 const $  = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 
+// ── Numeric input with thousand separators ─────────────────
+const parseNum = v => {
+  if (v == null) return 0;
+  const s = String(v).replace(/[^\d-]/g, '');
+  return s ? +s : 0;
+};
+const fmtNumInput = n => {
+  if (n == null || isNaN(n)) return '';
+  return Math.round(n).toLocaleString('vi-VN');
+};
+const setNumVal = (el, n) => { if (el) el.value = fmtNumInput(n); };
+const getNumVal = id => parseNum($(id)?.value);
+
+// Live format [data-num] inputs while preserving caret position
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (!t.matches || !t.matches('input[data-num]')) return;
+  const before = t.value;
+  const caret = t.selectionStart || 0;
+  const digitsBefore = (before.slice(0, caret).match(/\d/g) || []).length;
+  const num = parseNum(before);
+  const formatted = num === 0 && before.trim() === '' ? '' : num.toLocaleString('vi-VN');
+  if (formatted !== before) {
+    t.value = formatted;
+    let pos = 0, seen = 0;
+    while (pos < formatted.length && seen < digitsBefore) {
+      if (/\d/.test(formatted[pos])) seen++;
+      pos++;
+    }
+    try { t.setSelectionRange(pos, pos); } catch(_) {}
+  }
+}, true);
+
+// Format initial values for any [data-num] inputs currently in DOM
+function formatNumInputs(root = document) {
+  root.querySelectorAll('input[data-num]').forEach(el => {
+    const raw = el.value.trim();
+    if (!raw) return;
+    const n = parseNum(raw);
+    el.value = isNaN(n) ? raw : n.toLocaleString('vi-VN');
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => formatNumInputs());
+} else {
+  formatNumInputs();
+}
+
 // ── Tabs ───────────────────────────────────────────────────
 $$('.tab').forEach(t => t.onclick = () => {
   $$('.tab').forEach(x => x.classList.remove('active'));
@@ -96,8 +144,8 @@ function initHoldingsTable() {
     tr.innerHTML = `
       <td>${i+1}</td>
       <td><input type="text" data-i="${i}" data-f="sym" placeholder=""></td>
-      <td><input type="number" data-i="${i}" data-f="qty" value="0"></td>
-      <td><input type="number" data-i="${i}" data-f="price" value="0"></td>
+      <td><input type="text" inputmode="numeric" data-num data-i="${i}" data-f="qty" value="0"></td>
+      <td><input type="text" inputmode="numeric" data-num data-i="${i}" data-f="price" value="0"></td>
       <td class="calc" data-i="${i}" data-f="evalPrice">0</td>
       <td><input type="number" data-i="${i}" data-f="r" value="0.5" min="0" max="1" step="0.05"
           style="width:70px;text-align:right;background:#FFF9C4;color:#0d47a1;font-weight:600;
@@ -126,6 +174,8 @@ function onHoldingChange(e) {
     // Đánh dấu đã sửa tay → đổi màu cam nhạt
     t.dataset.manualEdit = '1';
     t.style.background = '#FFE0B2';
+  } else if (f === 'qty' || f === 'price') {
+    STATE.holdings[i][f] = parseNum(t.value);
   } else {
     STATE.holdings[i][f] = +t.value || 0;
   }
@@ -140,7 +190,7 @@ async function onHoldingBlur(e) {
       if (p) {
         const i = +t.dataset.i;
         const inputPrice = document.querySelector(`input[data-i="${i}"][data-f="price"]`);
-        inputPrice.value = Math.round(p.price);
+        setNumVal(inputPrice, p.price);
         STATE.holdings[i].price = p.price;
       }
       // Gợi ý T.lệ margin từ master list cho mã vừa gõ
@@ -277,13 +327,13 @@ async function onBuySymBlur() {
   const sym = $('bSym').value.toUpperCase().trim();
   if (sym) {
     const p = await fetchPrice(sym);
-    if (p) { $('bPrice').value = Math.round(p.price); $('bPriceNote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
+    if (p) { setNumVal($('bPrice'), p.price); $('bPriceNote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
   }
   recalcAll();
 }
 function recalcBuy(V, D, room, cash) {
   const sym   = $('bSym').value.toUpperCase().trim();
-  const price = +$('bPrice').value || 0;
+  const price = getNumVal('bPrice');
   const r     = getR(sym);
   const fb    = getFb();
 
@@ -340,9 +390,9 @@ async function onDealSymBlur(e) {
   if (!sym) return;
   const p = await fetchPrice(sym);
   if (!p) return;
-  if (id === 'd1Sym') { $('d1P').value = Math.round(p.price); $('d1Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
-  if (id === 'd2Sym') { $('d2P').value = Math.round(p.price); $('d2Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
-  if (id === 'd3Sym') { $('d3P').value = Math.round(p.price); $('d3Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
+  if (id === 'd1Sym') { setNumVal($('d1P'), p.price); $('d1Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
+  if (id === 'd2Sym') { setNumVal($('d2P'), p.price); $('d2Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
+  if (id === 'd3Sym') { setNumVal($('d3P'), p.price); $('d3Pnote').textContent = `Giá TT: ${fmtVND(p.price)}`; }
   // Auto-fill r from master
   const r = getR(sym);
   $('dR').value = r;
@@ -358,7 +408,7 @@ function recalcDeals() {
   $('dRp').textContent = (rp*100).toFixed(2) + '%';
 
   // Deal 1
-  const N1 = +$('d1N').value || 0, P1 = +$('d1P').value || 0;
+  const N1 = getNumVal('d1N'), P1 = getNumVal('d1P');
   const V1 = N1 * P1;
   const X1 = V1 * rp / (1 + fb);
   const cash1 = X1 * (1 - fs);
@@ -370,7 +420,7 @@ function recalcDeals() {
   $('d1Rtt').textContent = V1>0 ? fmtPct((V1-debt1)/V1) : '—';
 
   // Deal 2
-  const Y = +$('d2Y').value || 0, P2 = +$('d2P').value || 0;
+  const Y = getNumVal('d2Y'), P2 = getNumVal('d2P');
   const Vneed2 = (rp>0 && (1-fs)>0) ? Y * (1+fb) / (rp * (1-fs)) : 0;
   const N2 = P2>0 ? Math.ceil(Vneed2 / P2 / 100) * 100 : 0;
   const Vreal2 = N2 * P2;
@@ -382,7 +432,7 @@ function recalcDeals() {
   $('d2Debt').textContent = fmtVND(X2 * (1 + fb));
 
   // Deal 3
-  const Z = +$('d3Z').value || 0, P3 = +$('d3P').value || 0;
+  const Z = getNumVal('d3Z'), P3 = getNumVal('d3P');
   const Vneed3 = rp > 0 ? Z / rp : 0;
   const N3 = P3>0 ? Math.ceil(Vneed3 / P3 / 100) * 100 : 0;
   const Vreal3 = N3 * P3;
@@ -513,7 +563,7 @@ $('btnRefreshAll').onclick = async () => {
     const p = await fetchPrice(sym);
     if (p) {
       const el = document.querySelector(`input[data-i="${i}"][data-f="price"]`);
-      el.value = Math.round(p.price);
+      setNumVal(el, p.price);
       STATE.holdings[i].price = p.price;
     }
   }

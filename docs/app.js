@@ -77,20 +77,21 @@ $$('.tab').forEach(t => t.onclick = () => {
 
 // ── Load master + caps ─────────────────────────────────────
 async function loadMaster() {
-  try {
-    const r = await fetch('/api/stocks'); const d = await r.json();
-    STATE.master = d.stocks || {};
-    if ($('listDate')) $('listDate').textContent = `Danh mục áp dụng: ${d.updated || '—'}  (${d.count||0} mã)`;
-    if ($('listCount')) $('listCount').textContent = d.count || Object.keys(STATE.master).length;
-    $('hdrInfo').textContent = `${d.count || 0} mã CK · cập nhật ${d.updated || '—'}`;
-  } catch(e) {
-    $('hdrInfo').textContent = '⚠️ Không tải được master list';
+  let d = null;
+  for (const url of ['/api/stocks', 'stocks.json']) {
+    try { const r = await fetch(url); if (r.ok) { d = await r.json(); break; } } catch(_) {}
   }
+  if (!d) { $('hdrInfo').textContent = '⚠️ Không tải được master list'; return; }
+  STATE.master = d.stocks || {};
+  if ($('listDate')) $('listDate').textContent = `Danh mục áp dụng: ${d.updated || '—'}  (${d.count||0} mã)`;
+  if ($('listCount')) $('listCount').textContent = d.count || Object.keys(STATE.master).length;
+  $('hdrInfo').textContent = `${d.count || 0} mã CK · cập nhật ${d.updated || '—'}`;
 }
 async function loadCaps() {
-  try {
-    const r = await fetch('/api/caps'); STATE.caps = await r.json();
-  } catch(e) { STATE.caps = {}; }
+  for (const url of ['/api/caps', 'caps.json']) {
+    try { const r = await fetch(url); if (r.ok) { STATE.caps = await r.json(); return; } } catch(_) {}
+  }
+  STATE.caps = {};
 }
 async function saveCaps() {
   await fetch('/api/caps', {method:'POST', headers:{'content-type':'application/json'},
@@ -99,32 +100,28 @@ async function saveCaps() {
   setTimeout(()=>$('capInfo').textContent='', 3000);
 }
 
-// ── Fetch giá tham chiếu hôm nay (sstock.vn qua corsproxy) ─
-// BasicPrice trả về đơn vị nghìn đồng, nhân 1000 để ra đồng.
+// ── Giá tham chiếu hôm nay (đọc từ prices.json, cập nhật 1 lần/ngày) ─
+async function loadPrices() {
+  try {
+    // Thử backend (server.py) trước, fallback file tĩnh trong cùng folder
+    let d = null;
+    try { const r = await fetch('/prices.json'); if (r.ok) d = await r.json(); } catch(_) {}
+    if (!d) { const r = await fetch('prices.json'); if (r.ok) d = await r.json(); }
+    if (!d) throw new Error('prices.json không tải được');
+    for (const [sym, price] of Object.entries(d.prices || {})) {
+      STATE.prices[sym] = { price, ref: price };
+    }
+    if ($('hdrInfo')) {
+      const cur = $('hdrInfo').textContent;
+      $('hdrInfo').textContent = `${cur} · Giá TC ${d.tradingDate || d.updated || '?'}`;
+    }
+  } catch(e) { console.warn('loadPrices', e); }
+}
+
 async function fetchPrice(sym) {
   if (!sym) return null;
   sym = sym.toUpperCase().trim();
-  if (STATE.prices[sym]) return STATE.prices[sym];
-  const upstream = `https://api-feature.sstock.vn/api/v1/prices/realtime?symbol=${sym}`;
-  const url = `https://corsproxy.io/?url=${encodeURIComponent(upstream)}`;
-  try {
-    const r = await fetch(url);
-    const d = await r.json();
-    const bp = d?.data?.BasicPrice;
-    if (bp) {
-      const price = bp * 1000;
-      STATE.prices[sym] = {
-        price,
-        ref: price,
-        current: (d.data.CurrentPrice || d.data.MatchedPrice || bp) * 1000,
-        ceil: (d.data.CeilPrice || 0) * 1000,
-        floor: (d.data.FlrPrice || 0) * 1000,
-        change: 0, changePct: 0,
-      };
-      return STATE.prices[sym];
-    }
-  } catch(e) { console.warn('fetchPrice', sym, e); }
-  return null;
+  return STATE.prices[sym] || null;
 }
 
 function getR(sym) {
@@ -616,6 +613,7 @@ async function prefetchDefaultPrices() {
 (async () => {
   await loadMaster();
   await loadCaps();
+  await loadPrices();
   initHoldingsTable();
   recalcAll();
   prefetchDefaultPrices();

@@ -194,31 +194,27 @@ function onHoldingChange(e) {
 }
 async function onHoldingBlur(e) {
   const t = e.target; if (!t.dataset) return;
-  if (t.dataset.f === 'sym') {
-    const sym = t.value.toUpperCase().trim();
-    if (sym && !STATE.prices[sym]) {
-      const p = await fetchPrice(sym);
-      if (p) {
-        const i = +t.dataset.i;
-        const inputPrice = document.querySelector(`input[data-i="${i}"][data-f="price"]`);
-        setNumVal(inputPrice, p.price);
-        STATE.holdings[i].price = p.price;
-      }
-      // Gợi ý T.lệ margin từ master list cho mã vừa gõ
-      const sym2 = t.value.toUpperCase().trim();
-      const masterR = STATE.master[sym2]?.r;
-      if (masterR != null) {
-        const i = +t.dataset.i;
-        const rEl = document.querySelector(`input[data-i="${i}"][data-f="r"]`);
-        // Chỉ fill nếu vẫn còn mặc định 0.5 (chưa sửa tay)
-        if (!rEl.dataset.manualEdit) {
-          rEl.value = masterR;
-          STATE.holdings[i].r = masterR;
-        }
-      }
-      recalcAll();
+  if (t.dataset.f !== 'sym') return;
+  const sym = t.value.toUpperCase().trim();
+  if (!sym) return;
+  const i = +t.dataset.i;
+  // Fill giá tham chiếu (luôn ghi đè khi user vừa gõ mã, kể cả khi prices đã prefetch)
+  const p = await fetchPrice(sym);
+  if (p) {
+    const inputPrice = document.querySelector(`input[data-i="${i}"][data-f="price"]`);
+    setNumVal(inputPrice, p.price);
+    STATE.holdings[i].price = p.price;
+  }
+  // Gợi ý T.lệ margin từ master list
+  const masterR = STATE.master[sym]?.r;
+  if (masterR != null) {
+    const rEl = document.querySelector(`input[data-i="${i}"][data-f="r"]`);
+    if (!rEl.dataset.manualEdit) {
+      rEl.value = masterR;
+      STATE.holdings[i].r = masterR;
     }
   }
+  recalcAll();
 }
 
 function recalcHoldings() {
@@ -496,7 +492,10 @@ function renderCaps() {
   const frag = document.createDocumentFragment();
   for (const row of show) {
     const tr = document.createElement('tr');
-    const placeholderHigh = row.pl1Cap ? row.pl1Cap.toLocaleString('vi-VN') : 'giá TT';
+    const refPx = STATE.prices[row.sym]?.price;
+    const placeholderHigh = row.pl1Cap
+      ? row.pl1Cap.toLocaleString('vi-VN')
+      : (refPx ? refPx.toLocaleString('vi-VN') : 'giá TC');
     const pl1Tag = row.pl1Cap ? `<span style="font-size:10px;color:#2e7d32" title="PL1: ${row.pl1Cap.toLocaleString('vi-VN')}đ">PL1</span>` : '';
     const limTxt = row.limit ? `${(row.limit/1e9).toFixed(0)} tỷ` : '—';
     tr.innerHTML = `

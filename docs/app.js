@@ -10,8 +10,10 @@ const STATE = {
 };
 
 const fmtVND = n => (n==null || isNaN(n)) ? '—' : Math.round(n).toLocaleString('vi-VN');
-const getFb  = () => (+$('pFb').value  || 0.15) / 100;   // nhập % → chia 100
-const getFs  = () => getFb() + 0.001;                    // phí bán = phí mua + thuế bán 0.1%
+const getFb       = () => (+$('pFb').value       || 0.15) / 100;
+const getFs       = () => getFb() + 0.001;
+const getMaxRatio = () => (+($('pMaxRatio')?.value) || 20) / 100;
+const getMaxLoan  = () => +($('pMaxLoan')?.value)   || 81e9;
 const fmtPct = n => (n==null || isNaN(n)) ? '—' : (n*100).toFixed(2) + '%';
 const fmtNum = n => (n==null || isNaN(n)) ? '—' : Math.round(n).toLocaleString('vi-VN');
 const $  = id => document.getElementById(id);
@@ -202,6 +204,16 @@ function recalcAll() {
   $('rRtt').textContent = fmtPct(rtt);
   $('rDmax').textContent = fmtVND(totDmax);
   $('rRoom').textContent = fmtVND(room);
+
+  const perStockLim = totDmax * getMaxRatio();
+  const loanRoom    = getMaxLoan() - D;
+  if ($('rPerStockLim')) $('rPerStockLim').textContent = fmtVND(perStockLim);
+  if ($('rLoanRoom')) {
+    const el = $('rLoanRoom');
+    el.textContent = fmtVND(loanRoom);
+    el.style.color = loanRoom < 0 ? '#c0392b' : '';
+    el.style.fontWeight = loanRoom < 0 ? '700' : '';
+  }
 
   const cm = +$('pCall').value || 0.35;
   const fs = +$('pForce').value || 0.25;
@@ -481,7 +493,7 @@ $('capFilter').oninput = renderCaps;
 $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
-['aCash','aDebt','aInt','pFb','pCall','pForce','bSym','bPrice','bQtyWant',
+['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxRatio','pMaxLoan','bSym','bPrice','bQtyWant',
  'dR','dRtt','d1N','d1P','d2Y','d2P','d3Z','d3P']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 

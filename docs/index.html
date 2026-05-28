@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OCBS Margin Calculator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>📊 OCBS Margin Calculator</h1>
+  <span class="sub" id="hdrInfo">Đang tải master list…</span>
+</header>
+
+<nav class="tabs">
+  <div class="tab active" data-tab="rtt">🧮 Rtt & Danh mục</div>
+  <div class="tab" data-tab="viphm">⚠️ Xử lý vi phạm</div>
+  <div class="tab" data-tab="sucmua">💰 Sức mua & Mua CP</div>
+  <div class="tab" data-tab="deals">🔁 3 Deals</div>
+  <div class="tab" data-tab="caps">⚙️ Giá chặn</div>
+</nav>
+
+<div class="container">
+
+  <!-- ========================= TAB 1: Rtt & Danh mục ========================= -->
+  <section class="panel active" data-panel="rtt">
+    <div class="card">
+      <div class="card-header">I. THAM SỐ OCBS</div>
+      <div class="row"><label>Phí giao dịch (mua = bán)</label><input id="pFb" type="number" value="0.15" step="0.01" min="0" max="2" placeholder="0.15"><span class="note">Nhập theo % — mặc định 0.15%</span></div>
+      <div class="row"><label>Thuế bán</label><div class="calc" style="font-size:13px">0.10% (cố định)</div><span class="note"></span></div>
+      <div class="row"><label>Tổng phí + thuế bán</label><div class="calc" id="pFsDisplay">0.25%</div><span class="note">= Phí + 0.1%</span></div>
+      <div class="row"><label>Ngưỡng Call Margin</label><input id="pCall" type="number" value="0.35" step="0.01"><span class="note">Rtt < 35% → Call Margin</span></div>
+      <div class="row"><label>Ngưỡng Force Sell</label><input id="pForce" type="number" value="0.25" step="0.01"><span class="note">Rtt < 25% → bán giải chấp</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">II. THÔNG TIN TÀI KHOẢN</div>
+      <div class="row"><label>Tiền mặt khả dụng (đ)</label><input id="aCash" type="number" value="0"><span class="note">Số dư hiện tại</span></div>
+      <div class="row"><label>Dư nợ margin (đ)</label><input id="aDebt" type="number" value="0"><span class="note">Nợ gốc</span></div>
+      <div class="row"><label>Lãi vay (đ)</label><input id="aInt" type="number" value="0"><span class="note">Lãi phát sinh</span></div>
+      <div class="row"><label><b>Tổng nợ (D)</b></label><div class="calc total" id="aTotalDebt">0</div><span class="note">= Nợ + Lãi</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">III. DANH MỤC CỔ PHIẾU</div>
+      <div class="toolbar">
+        <button class="btn sm" id="btnRefreshAll">🔄 Refresh tất cả giá</button>
+        <button class="btn sm" id="btnClearRows">🗑️ Xoá hết</button>
+        <span class="info" id="rttInfo"></span>
+      </div>
+      <table class="dm" id="tblHoldings">
+        <thead><tr>
+          <th>#</th><th>Mã CK</th><th>Số lượng</th><th>Giá TT (đ)</th><th>Giá đánh giá</th>
+          <th>T.lệ Margin ✏️</th><th>GT TT (đ)</th><th>Dư nợ max</th><th>Ký quỹ YC</th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot><tr id="rowTotal">
+          <td colspan="6" style="text-align:right;font-weight:700;background:var(--total)">TỔNG</td>
+          <td class="calc total" id="totMV">0</td>
+          <td class="calc total" id="totDmax">0</td>
+          <td class="calc total" id="totMR">0</td>
+        </tr></tfoot>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">IV. KẾT QUẢ ĐÁNH GIÁ Rtt</div>
+      <div class="row"><label>Giá trị danh mục CP (V_cp)</label><div class="calc" id="rVcp">0</div><span></span></div>
+      <div class="row"><label>Tiền mặt khả dụng (M)</label><div class="calc" id="rM">0</div><span></span></div>
+      <div class="row"><label><b>Tổng tài sản V</b></label><div class="calc total" id="rV">0</div><span></span></div>
+      <div class="row"><label><b>Tổng nợ D</b></label><div class="calc total" id="rD">0</div><span></span></div>
+      <div class="row"><label><b>Vốn chủ E = V − D</b></label><div class="calc total" id="rE">0</div><span></span></div>
+      <div class="row"><label><b>Tỷ lệ Rtt = E / V</b></label><div class="calc star" id="rRtt">—</div><span></span></div>
+      <div class="row"><label>Dư nợ max danh mục</label><div class="calc" id="rDmax">0</div><span></span></div>
+      <div class="row"><label>Hạn mức còn lại</label><div class="calc" id="rRoom">0</div><span></span></div>
+      <div class="status" id="rStatus">—</div>
+
+      <!-- Panel cảnh báo – chỉ hiện khi Call Margin / Force Sell -->
+      <div id="alertPanel" style="display:none">
+        <div class="alert-box" id="alertBox">
+          <div class="alert-title" id="alertTitle"></div>
+          <div class="alert-grid">
+            <div class="alert-col">
+              <div class="alert-head">💰 NỘP TIỀN MẶT</div>
+              <div class="alert-row"><span>Về Rtt = 50% (IM ban đầu)</span><span class="alert-val" id="aC50"></span></div>
+              <div class="alert-row"><span>Về Rtt = 35% (thoát Call)</span><span class="alert-val" id="aC35"></span></div>
+            </div>
+            <div class="alert-col">
+              <div class="alert-head">📉 BÁN CỔ PHIẾU (trả nợ)</div>
+              <div class="alert-row"><span>Về Rtt = 50% (IM ban đầu)</span><span class="alert-val" id="aS50"></span></div>
+              <div class="alert-row"><span>Về Rtt = 35% (thoát Call)</span><span class="alert-val" id="aS35"></span></div>
+            </div>
+          </div>
+          <div class="alert-note">Công thức: Nộp tiền C = D/(1−Rtt*) − V  |  Bán CP S = V − E/Rtt*</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= TAB 2: Xử lý vi phạm ========================= -->
+  <section class="panel" data-panel="viphm">
+    <div class="card">
+      <div class="card-header">THÔNG TIN HIỆN TẠI (từ tab 1)</div>
+      <div class="row"><label>V (Tổng tài sản)</label><div class="calc" id="vV">0</div><span></span></div>
+      <div class="row"><label>D (Tổng nợ)</label><div class="calc" id="vD">0</div><span></span></div>
+      <div class="row"><label>E = V − D</label><div class="calc" id="vE">0</div><span></span></div>
+      <div class="row"><label>Rtt hiện tại</label><div class="calc" id="vRtt">—</div><span></span></div>
+    </div>
+
+    <div class="section-sub">PHƯƠNG ÁN 1 — NỘP TIỀN MẶT</div>
+    <div class="card">
+      <div class="row"><label>Nộp tiền để Rtt đạt 50%</label><div class="calc star" id="d50">0</div><span class="note">C = D/(1−50%) − V</span></div>
+      <div class="row"><label>→ Rtt sau khi nộp</label><div class="calc" id="d50r">—</div><span></span></div>
+      <div class="row"><label>Nộp tiền để Rtt đạt 35%</label><div class="calc star" id="d35">0</div><span class="note">Thoát Call Margin</span></div>
+      <div class="row"><label>→ Rtt sau khi nộp</label><div class="calc" id="d35r">—</div><span></span></div>
+    </div>
+
+    <div class="section-sub">PHƯƠNG ÁN 2 — BÁN CỔ PHIẾU (trả nợ)</div>
+    <div class="card">
+      <div class="row"><label>Bán CP để Rtt đạt 35%</label><div class="calc star" id="s35">0</div><span class="note">S = V − E/35%</span></div>
+      <div class="row"><label>→ Rtt sau khi bán</label><div class="calc" id="s35r">—</div><span></span></div>
+      <div class="row"><label>Bán CP để Rtt đạt 50%</label><div class="calc star" id="s50">0</div><span class="note">S = V − E/50%</span></div>
+      <div class="row"><label>→ Rtt sau khi bán</label><div class="calc" id="s50r">—</div><span></span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">📌 GIẢI THÍCH</div>
+      <div class="hint">• Nộp tiền: V↑, E↑, D không đổi → Rtt mới = (E+C)/(V+C)</div>
+      <div class="hint">• Bán CP trả nợ: V↓, D↓, E không đổi → Rtt mới = E/(V−S)</div>
+      <div class="hint">• C = D/(1−Rtt*) − V   |   S = V − E/Rtt*</div>
+    </div>
+  </section>
+
+  <!-- ========================= TAB 3: Sức mua ========================= -->
+  <section class="panel" data-panel="sucmua">
+    <div class="card">
+      <div class="card-header">I. TÌNH TRẠNG MARGIN HIỆN TẠI</div>
+      <div class="row"><label>V (Tổng tài sản)</label><div class="calc" id="bV">0</div><span></span></div>
+      <div class="row"><label>D (Tổng nợ)</label><div class="calc" id="bD">0</div><span></span></div>
+      <div class="row"><label>Rtt hiện tại</label><div class="calc" id="bRtt">—</div><span></span></div>
+      <div class="row"><label>Dư nợ max danh mục</label><div class="calc" id="bDmax">0</div><span></span></div>
+      <div class="row"><label>Hạn mức còn lại (Room)</label><div class="calc" id="bRoom">0</div><span></span></div>
+      <div class="row"><label>Tiền mặt hiện có (M)</label><div class="calc" id="bM">0</div><span></span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">II. MUA THÊM CP TỪ ROOM HIỆN TẠI</div>
+      <div class="row"><label>Mã CK muốn mua</label><input id="bSym" type="text" placeholder="VD: HPG"><span class="note">Tự tra T.lệ margin</span></div>
+      <div class="row"><label>Giá đặt mua (đ)</label><input id="bPrice" type="number" value="0"><span class="note" id="bPriceNote"></span></div>
+      <div class="row"><label>T.lệ Margin CP này</label><div class="calc" id="bR">0%</div><span class="note">Auto từ master list</span></div>
+      <div class="row"><label>Sức mua từ Room</label><div class="calc" id="bBpRoom">0</div><span class="note">= Room / T.lệ Margin</span></div>
+      <div class="row"><label>Sức mua từ Cash</label><div class="calc" id="bBpCash">0</div><span class="note">= M / (1−T.lệ)</span></div>
+      <div class="row"><label><b>Sức mua TỔNG (GT lệnh)</b></label><div class="calc star" id="bBpTotal">0</div><span></span></div>
+      <div class="row"><label>KL tối đa có thể đặt</label><div class="calc" id="bQtyMax">0</div><span class="note">làm tròn xuống 100</span></div>
+      <div class="row"><label>Phí mua ước tính</label><div class="calc" id="bFee">0</div><span></span></div>
+      <div class="row"><label>Tiền vay dự kiến</label><div class="calc" id="bLoan">0</div><span></span></div>
+      <div class="row"><label><b>Rtt sau khi mua</b></label><div class="calc star" id="bRttAfter">—</div><span></span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">III. KL MONG MUỐN → TIỀN CẦN NỘP THÊM</div>
+      <div class="hint">(Dùng Mã CK + Giá từ mục II ở trên)</div>
+      <div class="row"><label>KL mong muốn mua (CP)</label><input id="bQtyWant" type="number" value="0"><span class="note">Số CP định đặt</span></div>
+      <div class="row"><label>GT lệnh mong muốn</label><div class="calc" id="bValWant">0</div><span></span></div>
+      <div class="row"><label>Equity cần (KH có)</label><div class="calc" id="bEqWant">0</div><span></span></div>
+      <div class="row"><label>CTCK cho vay</label><div class="calc" id="bLoanWant">0</div><span></span></div>
+      <div class="row"><label>Đủ Room chưa?</label><div class="calc" id="bRoomCheck">—</div><span></span></div>
+      <div class="row"><label><b>Tiền cần NỘP THÊM</b></label><div class="calc star" id="bDeposit">0</div><span class="note">= Equity cần − Tiền có</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">IV. NGƯỠNG GIÁ – KIỂM TRA</div>
+      <div class="hint">Giả định mã đang xét là MWG, KL theo input bên trên. Giá hiện tại tự lấy từ ô Giá ở mục II.</div>
+      <div class="row"><label>Giá Call Margin (Rtt = 35%)</label><div class="calc" id="bPCall">0</div><span></span></div>
+      <div class="row"><label>Giá Force Sell (Rtt = 25%)</label><div class="calc" id="bPForce">0</div><span></span></div>
+      <div class="row"><label>% giảm đến Call Margin</label><div class="calc" id="bDCall">—</div><span></span></div>
+      <div class="row"><label>% giảm đến Force Sell</label><div class="calc" id="bDForce">—</div><span></span></div>
+    </div>
+  </section>
+
+  <!-- ========================= TAB 4: 3 Deals ========================= -->
+  <section class="panel" data-panel="deals">
+    <div class="card">
+      <div class="card-header">THAM SỐ CHUNG</div>
+      <div class="row"><label>T.lệ margin CP (r)</label><input id="dR" type="number" value="0.5" step="0.05"><span class="note">Mặc định 50%</span></div>
+      <div class="row"><label>Rtt mục tiêu sau giao dịch</label><input id="dRtt" type="number" value="0.5" step="0.05"><span class="note">0.5 = IM ban đầu (an toàn)</span></div>
+      <div class="row"><label>r' = min(r, 1−Rtt*)</label><div class="calc" id="dRp">0</div><span class="note">Ràng buộc chặt</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header deal">▶ DEAL 1: Lưu ký N cp → RÚT TỐI ĐA bao nhiêu?</div>
+      <div class="row"><label>Mã CK</label><input id="d1Sym" type="text" value="MWG"><span class="note">Tham khảo</span></div>
+      <div class="row"><label>Số CP lưu ký (N)</label><input id="d1N" type="number" value="1000000"><span></span></div>
+      <div class="row"><label>Giá CP (đ)</label><input id="d1P" type="number" value="86000"><span class="note" id="d1Pnote"></span></div>
+      <div class="row"><label>V = N × P</label><div class="calc" id="d1V">0</div><span></span></div>
+      <div class="row"><label>GT lệnh mua/bán</label><div class="calc" id="d1X">0</div><span class="note">= V·r'/(1+f_b)</span></div>
+      <div class="row"><label><b>▶ TIỀN RÚT TỐI ĐA</b></label><div class="calc star" id="d1Cash">0</div><span class="note">= X·(1−f_s)</span></div>
+      <div class="row"><label>Dư nợ còn lại</label><div class="calc" id="d1Debt">0</div><span class="note">= X·(1+f_b)</span></div>
+      <div class="row"><label>Rtt verify</label><div class="calc" id="d1Rtt">—</div><span></span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header deal">▶ DEAL 2: Cần RÚT Y đồng → LƯU KÝ bao nhiêu CP?</div>
+      <div class="row"><label>Mã CK</label><input id="d2Sym" type="text" value="MWG"><span></span></div>
+      <div class="row"><label>Số tiền cần rút Y (đ)</label><input id="d2Y" type="number" value="10000000000"><span></span></div>
+      <div class="row"><label>Giá CP (đ)</label><input id="d2P" type="number" value="86000"><span class="note" id="d2Pnote"></span></div>
+      <div class="row"><label>V cần</label><div class="calc" id="d2V">0</div><span class="note">= Y·(1+f_b)/[r'·(1−f_s)]</span></div>
+      <div class="row"><label><b>▶ SỐ CP CẦN LƯU KÝ</b></label><div class="calc star" id="d2N">0</div><span class="note">làm tròn lên 100</span></div>
+      <div class="row"><label>V thực tế</label><div class="calc" id="d2Vreal">0</div><span></span></div>
+      <div class="row"><label>Tiền rút thực tế</label><div class="calc" id="d2Cash">0</div><span></span></div>
+      <div class="row"><label>Dư nợ phát sinh</label><div class="calc" id="d2Debt">0</div><span></span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header deal">▶ DEAL 3: Cần DƯ NỢ Z đồng → LƯU KÝ bao nhiêu CP?</div>
+      <div class="row"><label>Mã CK</label><input id="d3Sym" type="text" value="MWG"><span></span></div>
+      <div class="row"><label>Dư nợ mong muốn Z (đ)</label><input id="d3Z" type="number" value="50000000000"><span></span></div>
+      <div class="row"><label>Giá CP (đ)</label><input id="d3P" type="number" value="86000"><span class="note" id="d3Pnote"></span></div>
+      <div class="row"><label>V cần</label><div class="calc" id="d3V">0</div><span class="note">= Z / r'</span></div>
+      <div class="row"><label><b>▶ SỐ CP CẦN LƯU KÝ</b></label><div class="calc star" id="d3N">0</div><span></span></div>
+      <div class="row"><label>Tiền rút tương ứng</label><div class="calc" id="d3Cash">0</div><span></span></div>
+      <div class="row"><label>Dư nợ thực tế</label><div class="calc" id="d3Debt">0</div><span></span></div>
+    </div>
+  </section>
+
+  <!-- ========================= TAB 5: Giá chặn ========================= -->
+  <section class="panel" data-panel="caps">
+    <div class="card">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>DANH MỤC CK GIAO DỊCH KÝ QUỸ – OCBS</span>
+        <span id="listDate" style="font-size:11px;font-weight:400;opacity:.8">Đang tải...</span>
+      </div>
+      <div class="hint">
+        Toàn bộ <b id="listCount">—</b> mã CP trong danh mục ký quỹ OCBS. Ô màu vàng: nhập giá chặn thật (lấy từ BOS). Chưa nhập → tính theo giá thị trường.
+        <br>Giá chặn lưu trong trình duyệt (localStorage) — mỗi máy lưu riêng.
+      </div>
+      <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+        <input id="capSearch" type="text" placeholder="🔍 Tìm mã, tên..." style="max-width:220px">
+        <select id="capFilter" style="padding:6px 10px;border:1px solid #dbe3ec;border-radius:6px;font-size:13px">
+          <option value="all">Tất cả</option>
+          <option value="capped">Đã có giá chặn</option>
+          <option value="nocap">Chưa có giá chặn</option>
+        </select>
+        <select id="capExch" style="padding:6px 10px;border:1px solid #dbe3ec;border-radius:6px;font-size:13px">
+          <option value="">Tất cả sàn</option>
+          <option value="HOSE">HOSE</option>
+          <option value="HNX">HNX</option>
+          <option value="UPCOM">UPCOM</option>
+        </select>
+        <button class="btn sm" id="capSave">💾 Lưu giá chặn</button>
+        <span class="info" id="capInfo"></span>
+      </div>
+      <div style="overflow-x:auto;max-height:60vh;overflow-y:auto;position:relative">
+        <table class="dm" id="tblCaps" style="min-width:650px;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="cursor:pointer" data-sort="sym">Mã CK ↕</th>
+              <th>Tên Công ty</th>
+              <th>Sàn</th>
+              <th style="cursor:pointer" data-sort="r">T.lệ vay ↕</th>
+              <th title="Nhập từ BOS – để trống = dùng giá TT">Giá chặn trên ★</th>
+              <th title="Giá floor Force Sell">Giá chặn dưới</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div style="padding:8px 0;font-size:12px;color:#888" id="capPageInfo"></div>
+    </div>
+  </section>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

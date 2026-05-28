@@ -31,8 +31,8 @@
       <div class="row"><label>Tổng phí + thuế bán</label><div class="calc" id="pFsDisplay">0.25%</div><span class="note">= Phí + 0.1%</span></div>
       <div class="row"><label>Ngưỡng Call Margin</label><input id="pCall" type="number" value="0.35" step="0.01"><span class="note">Rtt < 35% → Call Margin</span></div>
       <div class="row"><label>Ngưỡng Force Sell</label><input id="pForce" type="number" value="0.25" step="0.01"><span class="note">Rtt < 25% → bán giải chấp</span></div>
-      <div class="row"><label>Hạn mức tối đa 1 mã (%)</label><input id="pMaxRatio" type="number" value="20" step="1" min="0" max="100"><span class="note">% trên tổng Dư nợ max danh mục</span></div>
       <div class="row"><label>Dư nợ tối đa toàn TK</label><input id="pMaxLoan" type="number" value="81000000000" step="1000000000"><span class="note">Hạn mức OCBS — mặc định 81 tỷ đ</span></div>
+      <div class="row"><label>Hạn mức 1 mã</label><div class="calc" style="font-size:13px;color:#2e7d32">✓ Tự động (Phụ lục 1)</div><span class="note">Áp dụng theo từng mã CK</span></div>
     </div>
 
     <div class="card">
@@ -75,7 +75,6 @@
       <div class="row"><label><b>Tỷ lệ Rtt = E / V</b></label><div class="calc star" id="rRtt">—</div><span></span></div>
       <div class="row"><label>Dư nợ max danh mục</label><div class="calc" id="rDmax">0</div><span></span></div>
       <div class="row"><label>Hạn mức còn lại</label><div class="calc" id="rRoom">0</div><span></span></div>
-      <div class="row"><label>Hạn mức Dư nợ max 1 mã</label><div class="calc" id="rPerStockLim">0</div><span class="note">= Dư nợ max DM × HM%</span></div>
       <div class="row"><label>Còn lại đến hạn mức TK</label><div class="calc" id="rLoanRoom">0</div><span class="note">= HM tối đa TK − D</span></div>
       <div class="status" id="rStatus">—</div>
 
@@ -262,8 +261,9 @@
               <th>Tên Công ty</th>
               <th>Sàn</th>
               <th style="cursor:pointer" data-sort="r">T.lệ vay ↕</th>
-              <th title="Nhập từ BOS – để trống = dùng giá TT">Giá chặn trên ★</th>
+              <th title="Để trống = dùng giá chặn PL1 nếu có, không có thì dùng giá TT">Giá chặn trên ★</th>
               <th title="Giá floor Force Sell">Giá chặn dưới</th>
+              <th title="Hạn mức dư nợ tối đa cho 1 mã (Phụ lục 1)">HM 1 mã</th>
             </tr>
           </thead>
           <tbody></tbody>

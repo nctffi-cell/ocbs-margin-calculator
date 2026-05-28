@@ -12,7 +12,6 @@ const STATE = {
 const fmtVND = n => (n==null || isNaN(n)) ? '—' : Math.round(n).toLocaleString('vi-VN');
 const getFb       = () => (+$('pFb').value       || 0.15) / 100;
 const getFs       = () => getFb() + 0.001;
-const getMaxRatio = () => (+($('pMaxRatio')?.value) || 20) / 100;
 const getMaxLoan  = () => +($('pMaxLoan')?.value)   || 81e9;
 const fmtPct = n => (n==null || isNaN(n)) ? '—' : (n*100).toFixed(2) + '%';
 const fmtNum = n => (n==null || isNaN(n)) ? '—' : Math.round(n).toLocaleString('vi-VN');
@@ -76,8 +75,15 @@ function getR(sym) {
   return m ? m.r : 0.5;
 }
 function getCapHigh(sym) {
-  const c = STATE.caps[(sym||'').toUpperCase()];
-  return (c && c.high) ? c.high : null;
+  const s = (sym||'').toUpperCase();
+  const u = STATE.caps[s];
+  if (u && u.high) return u.high;
+  const m = STATE.master[s];
+  return (m && m.cap) ? m.cap : null;
+}
+function getStockLimit(sym) {
+  const m = STATE.master[(sym||'').toUpperCase()];
+  return (m && m.limit) ? m.limit : null;
 }
 // Giá đánh giá = MIN(giá TT, giá chặn trên). Nếu chặn null → dùng giá TT
 function evalPrice(sym, marketPrice) {
@@ -165,8 +171,10 @@ function recalcHoldings() {
     const r = h.r ?? getR(h.sym);
     const pEval = evalPrice(h.sym, h.price);
     const mv = h.qty * pEval;
-    const dmax = mv * r;
-    const mr = mv * (1 - r);
+    const lim = getStockLimit(h.sym);
+    const dmaxRaw = mv * r;
+    const dmax = (lim != null) ? Math.min(dmaxRaw, lim) : dmaxRaw;
+    const mr = mv - dmax;
     totMV += mv; totDmax += dmax; totMR += mr;
     // Update cells
     document.querySelector(`[data-i="${i}"][data-f="evalPrice"]`).textContent = fmtVND(pEval);
@@ -205,9 +213,7 @@ function recalcAll() {
   $('rDmax').textContent = fmtVND(totDmax);
   $('rRoom').textContent = fmtVND(room);
 
-  const perStockLim = totDmax * getMaxRatio();
-  const loanRoom    = getMaxLoan() - D;
-  if ($('rPerStockLim')) $('rPerStockLim').textContent = fmtVND(perStockLim);
+  const loanRoom = getMaxLoan() - D;
   if ($('rLoanRoom')) {
     const el = $('rLoanRoom');
     el.textContent = fmtVND(loanRoom);
@@ -406,12 +412,14 @@ function renderCaps() {
     sym, name: m.name || '', exch: m.exch || '', r: m.r ?? 0.5,
     high: STATE.caps[sym]?.high || null,
     low:  STATE.caps[sym]?.low  || null,
+    pl1Cap: m.cap || null,
+    limit:  m.limit || null,
   }));
 
   // Filter
   if (search) rows = rows.filter(r => r.sym.includes(search) || r.name.toUpperCase().includes(search));
-  if (filter === 'capped') rows = rows.filter(r => r.high || r.low);
-  if (filter === 'nocap')  rows = rows.filter(r => !r.high && !r.low);
+  if (filter === 'capped') rows = rows.filter(r => r.high || r.low || r.pl1Cap);
+  if (filter === 'nocap')  rows = rows.filter(r => !r.high && !r.low && !r.pl1Cap);
   if (exch) rows = rows.filter(r => r.exch === exch);
 
   // Sort
@@ -431,16 +439,19 @@ function renderCaps() {
   const frag = document.createDocumentFragment();
   for (const row of show) {
     const tr = document.createElement('tr');
-    const hasCap = row.high || row.low;
+    const placeholderHigh = row.pl1Cap ? row.pl1Cap.toLocaleString('vi-VN') : 'giá TT';
+    const pl1Tag = row.pl1Cap ? `<span style="font-size:10px;color:#2e7d32" title="PL1: ${row.pl1Cap.toLocaleString('vi-VN')}đ">PL1</span>` : '';
+    const limTxt = row.limit ? `${(row.limit/1e9).toFixed(0)} tỷ` : '—';
     tr.innerHTML = `
-      <td style="font-weight:700;color:#1F3864">${row.sym}</td>
+      <td style="font-weight:700;color:#1F3864">${row.sym} ${pl1Tag}</td>
       <td style="text-align:left;font-size:12px;color:#444">${row.name}</td>
       <td style="text-align:center;font-size:12px">${row.exch}</td>
       <td style="text-align:center;font-weight:600;color:${row.r>=0.5?'#1a5276':'#7d6608'}">${(row.r*100).toFixed(0)}%</td>
       <td><input type="number" data-sym="${row.sym}" data-f="high" value="${row.high||''}"
-          placeholder="giá TT" style="${row.high ? 'background:#FFF2CC;color:#7d6608;font-weight:600' : ''}"></td>
+          placeholder="${placeholderHigh}" style="${row.high ? 'background:#FFF2CC;color:#7d6608;font-weight:600' : ''}"></td>
       <td><input type="number" data-sym="${row.sym}" data-f="low"  value="${row.low||''}"
           placeholder="—" style="${row.low  ? 'background:#FFF2CC;color:#7d6608;font-weight:600' : ''}"></td>
+      <td style="text-align:center;font-size:12px;color:#666">${limTxt}</td>
     `;
     frag.appendChild(tr);
   }
@@ -493,7 +504,7 @@ $('capFilter').oninput = renderCaps;
 $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
-['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxRatio','pMaxLoan','bSym','bPrice','bQtyWant',
+['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant',
  'dR','dRtt','d1N','d1P','d2Y','d2P','d3Z','d3P']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 

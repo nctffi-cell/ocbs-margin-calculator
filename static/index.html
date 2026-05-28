@@ -231,11 +231,11 @@
       <div class="row"><label>Số tiền nộp X (đ)</label><input id="d4X" type="text" inputmode="numeric" data-num value="1000000000"><span class="note">Tiền mặt anh bỏ ra</span></div>
       <div class="row"><label>Giá tham chiếu (đ)</label><input id="d4P" type="text" inputmode="numeric" data-num value="86000"><span class="note" id="d4Pnote"></span></div>
       <div class="row"><label>Giá muốn mua (đ)</label><input id="d4Pbuy" type="text" inputmode="numeric" data-num value="86000"><span class="note">Giá đặt lệnh thực tế</span></div>
-      <div class="row"><label>V mua tối đa</label><div class="calc" id="d4V">0</div><span class="note">= X / (1 + f_b − r')</span></div>
-      <div class="row"><label><b>▶ SỐ CP MUA TỐI ĐA</b></label><div class="calc star" id="d4N">0</div><span class="note">= floor(V/Pmua/100)×100</span></div>
-      <div class="row"><label>V mua thực tế</label><div class="calc" id="d4Vreal">0</div><span class="note">= N × Pmua</span></div>
-      <div class="row"><label>Tiền mặt thực dùng</label><div class="calc" id="d4Cash">0</div><span class="note">= V_real·(1+f_b−r')</span></div>
-      <div class="row"><label>Dư nợ phát sinh</label><div class="calc" id="d4Debt">0</div><span class="note">= V_real · r'</span></div>
+      <div class="row"><label>Chi phí mua (N × Pmua)</label><div class="calc" id="d4V">0</div><span class="note">Tổng tiền mua theo giá đặt</span></div>
+      <div class="row"><label><b>▶ SỐ CP MUA TỐI ĐA</b></label><div class="calc star" id="d4N">0</div><span class="note">N = X / [Pmua·(1+f_b) − Pref·r']</span></div>
+      <div class="row"><label>GT đánh giá (N × Pref)</label><div class="calc" id="d4Vreal">0</div><span class="note">Stock value theo giá TC, dùng tính Rtt</span></div>
+      <div class="row"><label>Tiền mặt thực dùng</label><div class="calc" id="d4Cash">0</div><span class="note">= N·[Pmua·(1+f_b) − Pref·r']</span></div>
+      <div class="row"><label>Dư nợ phát sinh</label><div class="calc" id="d4Debt">0</div><span class="note">= N · Pref · r'</span></div>
       <div class="row"><label>Tiền dư (chưa dùng)</label><div class="calc" id="d4Rem">0</div><span class="note">= X − tiền thực dùng</span></div>
       <div class="row"><label><b>Rtt sau khi mua</b></label><div class="calc star" id="d4Rtt">—</div><span class="note">= (V_sau − D_sau) / V_sau, cộng dồn danh mục Tab 1</span></div>
     </div>
@@ -290,6 +290,6 @@
 
 </div>
 
-<script src="app.js?v=20260528-2321"></script>
+<script src="app.js?v=20260528-2332"></script>
 </body>
 </html>

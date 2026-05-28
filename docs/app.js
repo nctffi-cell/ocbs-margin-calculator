@@ -468,26 +468,31 @@ function recalcDeals() {
   $('d3Cash').textContent = fmtVND(X3 * (1 - fs));
   $('d3Debt').textContent = fmtVND(X3 * (1 + fb));
 
-  // Deal 4: Nộp X tiền mặt → mua tối đa N cp mã Y với giá MUỐN MUA Pbuy
-  // V_mua = X / (1 + fb − rp), N = floor(V_mua / Pbuy / 100) × 100
-  const X4 = getNumVal('d4X'), P4buy = getNumVal('d4Pbuy') || getNumVal('d4P');
-  const denom4 = 1 + fb - rp;
-  const Vmax4 = (denom4 > 0) ? X4 / denom4 : 0;
-  const N4 = (P4buy > 0) ? Math.floor(Vmax4 / P4buy / 100) * 100 : 0;
-  const Vreal4 = N4 * P4buy;
-  const cash4  = Vreal4 * denom4;
-  const debt4  = Vreal4 * rp;
-  $('d4V').textContent    = fmtVND(Vmax4);
+  // Deal 4: Nộp X tiền mặt → mua tối đa N cp mã Y
+  // OCBS cho vay theo giá tham chiếu (Pref), còn user trả tiền theo giá mua (Pbuy).
+  //   Loan       = N · Pref · r'
+  //   Cash chi   = N · Pbuy · (1+fb) − N · Pref · r'  = N · [Pbuy·(1+fb) − Pref·r']
+  //   Đặt = X → N = floor( X / [Pbuy·(1+fb) − Pref·r'] / 100 ) × 100
+  const X4 = getNumVal('d4X');
+  const P4ref = getNumVal('d4P');
+  const P4buy = getNumVal('d4Pbuy') || P4ref;
+  const perShareCash = P4buy * (1 + fb) - P4ref * rp;  // tiền mặt cần cho 1 cp
+  const Nmax4 = (perShareCash > 0) ? X4 / perShareCash : 0;
+  const N4 = Math.max(0, Math.floor(Nmax4 / 100) * 100);
+  const Vcost4   = N4 * P4buy;            // chi phí mua (giá đặt)
+  const VrefVal4 = N4 * P4ref;            // giá trị stock để tính Rtt (giá TC)
+  const debt4    = VrefVal4 * rp;         // dư nợ vay margin
+  const cash4    = N4 * perShareCash;     // tiền mặt thực dùng
+  $('d4V').textContent    = fmtVND(Vcost4);
   $('d4N').textContent    = fmtNum(N4);
-  $('d4Vreal').textContent= fmtVND(Vreal4);
+  $('d4Vreal').textContent= fmtVND(VrefVal4);
   $('d4Cash').textContent = fmtVND(cash4);
   $('d4Debt').textContent = fmtVND(debt4);
   $('d4Rem').textContent  = fmtVND(Math.max(0, X4 - cash4));
-  // Rtt sau khi mua = (V_sau − D_sau) / V_sau, cộng dồn với danh mục Tab 1.
-  // Giả định: cash4 lấy từ tiền nộp X (không trừ vào aCash hiện tại); stocks tăng V_real, debt tăng debt4.
+  // Rtt sau = (V_sau − D_sau) / V_sau. V_sau cộng stock_ref + tiền nộp dư + tài khoản cũ.
   const acc = STATE.account || { V:0, D:0 };
-  const Vafter4 = acc.V + Vreal4;        // danh mục tăng V_real
-  const Dafter4 = acc.D + debt4;          // nợ tăng debt4
+  const Vafter4 = acc.V + VrefVal4 + Math.max(0, X4 - cash4);
+  const Dafter4 = acc.D + debt4;
   $('d4Rtt').textContent = (Vafter4 > 0 && N4 > 0)
     ? fmtPct((Vafter4 - Dafter4) / Vafter4)
     : '—';

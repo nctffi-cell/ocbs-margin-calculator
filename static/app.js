@@ -176,10 +176,23 @@ function onHoldingChange(e) {
   const t = e.target; if (!t.dataset) return;
   const i = +t.dataset.i, f = t.dataset.f;
   if (f === 'sym') {
-    STATE.holdings[i].sym = t.value.toUpperCase().trim();
-    // Xoá cờ manual edit khi đổi mã → cho phép auto-fill lại
+    const sym = t.value.toUpperCase().trim();
+    STATE.holdings[i].sym = sym;
     const rEl = document.querySelector(`input[data-i="${i}"][data-f="r"]`);
     if (rEl) { delete rEl.dataset.manualEdit; rEl.style.background = '#FFF9C4'; }
+    // Auto-fill T.lệ Margin từ master list ngay khi mã khớp
+    const masterR = STATE.master[sym]?.r;
+    if (masterR != null && rEl) {
+      rEl.value = masterR;
+      STATE.holdings[i].r = masterR;
+    }
+    // Auto-fill giá tham chiếu nếu đã có sẵn trong cache (prices.json)
+    const cachedPx = STATE.prices[sym]?.price;
+    if (cachedPx) {
+      const priceEl = document.querySelector(`input[data-i="${i}"][data-f="price"]`);
+      setNumVal(priceEl, cachedPx);
+      STATE.holdings[i].price = cachedPx;
+    }
   } else if (f === 'r') {
     STATE.holdings[i].r = +t.value || 0;
     // Đánh dấu đã sửa tay → đổi màu cam nhạt

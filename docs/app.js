@@ -413,7 +413,11 @@ async function onDealSymBlur(e) {
   if (id === 'd1Sym') { setNumVal($('d1P'), p.price); $('d1Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   if (id === 'd2Sym') { setNumVal($('d2P'), p.price); $('d2Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   if (id === 'd3Sym') { setNumVal($('d3P'), p.price); $('d3Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
-  if (id === 'd4Sym') { setNumVal($('d4P'), p.price); $('d4Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
+  if (id === 'd4Sym') {
+    setNumVal($('d4P'), p.price);
+    setNumVal($('d4Pbuy'), p.price);
+    $('d4Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`;
+  }
   // Auto-fill r from master
   const r = getR(sym);
   $('dR').value = r;
@@ -463,13 +467,13 @@ function recalcDeals() {
   $('d3Cash').textContent = fmtVND(X3 * (1 - fs));
   $('d3Debt').textContent = fmtVND(X3 * (1 + fb));
 
-  // Deal 4: Nộp X tiền mặt → mua tối đa N cp mã Y với giá P
-  // V_mua = X / (1 + fb − rp), N = floor(V_mua / P / 100) × 100
-  const X4 = getNumVal('d4X'), P4 = getNumVal('d4P');
+  // Deal 4: Nộp X tiền mặt → mua tối đa N cp mã Y với giá MUỐN MUA Pbuy
+  // V_mua = X / (1 + fb − rp), N = floor(V_mua / Pbuy / 100) × 100
+  const X4 = getNumVal('d4X'), P4buy = getNumVal('d4Pbuy') || getNumVal('d4P');
   const denom4 = 1 + fb - rp;
   const Vmax4 = (denom4 > 0) ? X4 / denom4 : 0;
-  const N4 = (P4 > 0) ? Math.floor(Vmax4 / P4 / 100) * 100 : 0;
-  const Vreal4 = N4 * P4;
+  const N4 = (P4buy > 0) ? Math.floor(Vmax4 / P4buy / 100) * 100 : 0;
+  const Vreal4 = N4 * P4buy;
   const cash4  = Vreal4 * denom4;
   const debt4  = Vreal4 * rp;
   $('d4V').textContent    = fmtVND(Vmax4);
@@ -591,7 +595,7 @@ $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
 ['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant',
- 'dR','dRtt','d1N','d1P','d2Y','d2P','d3Z','d3P','d4X','d4P']
+ 'dR','dRtt','d1N','d1P','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 
 ['d1Sym','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
@@ -625,7 +629,7 @@ async function prefetchDefaultPrices() {
     { symId: 'd1Sym', priceId: 'd1P', noteId: 'd1Pnote' },
     { symId: 'd2Sym', priceId: 'd2P', noteId: 'd2Pnote' },
     { symId: 'd3Sym', priceId: 'd3P', noteId: 'd3Pnote' },
-    { symId: 'd4Sym', priceId: 'd4P', noteId: 'd4Pnote' },
+    { symId: 'd4Sym', priceId: 'd4P', noteId: 'd4Pnote', buyId: 'd4Pbuy' },
     { symId: 'bSym',  priceId: 'bPrice', noteId: 'bPriceNote' },
   ];
   await Promise.all(targets.map(async t => {
@@ -634,6 +638,7 @@ async function prefetchDefaultPrices() {
     const p = await fetchPrice(sym);
     if (!p) return;
     setNumVal($(t.priceId), p.price);
+    if (t.buyId && $(t.buyId)) setNumVal($(t.buyId), p.price);
     if (t.noteId && $(t.noteId)) $(t.noteId).textContent = `Giá tham chiếu: ${fmtVND(p.price)}`;
   }));
   recalcAll();

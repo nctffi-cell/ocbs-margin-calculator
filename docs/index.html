@@ -127,11 +127,61 @@
       <div class="row"><label>→ Rtt sau khi bán</label><div class="calc" id="s50r">—</div><span></span></div>
     </div>
 
+    <div class="section-sub">PHÂN BỔ BÁN THEO TỪNG MÃ (mô phỏng)</div>
+    <div class="card">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>CHỌN MÃ &amp; SỐ LƯỢNG BÁN</span>
+        <span style="font-size:11px;font-weight:400;opacity:.85">Phí bán: <span id="spFee">0,25%</span></span>
+      </div>
+      <div class="hint">
+        Lấy danh mục từ tab 1. Tick mã muốn bán rồi nhập KL bán (hoặc bấm "Bán hết để đạt 35%/50%" để app tự chia).
+        Tiền thực trả nợ = giá trị bán × (1 − phí − thuế).
+      </div>
+      <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+        <select id="sellTarget" style="padding:6px 10px;border:1px solid #dbe3ec;border-radius:6px;font-size:13px">
+          <option value="0.35">Mục tiêu Rtt = 35% (thoát Call)</option>
+          <option value="0.5">Mục tiêu Rtt = 50% (IM ban đầu)</option>
+        </select>
+        <button class="btn sm" id="btnAutoFill">⚙️ Tự chia KL bán theo thứ tự tick</button>
+        <button class="btn sm" id="btnClearSell">🗑️ Bỏ chọn hết</button>
+      </div>
+      <table class="dm" id="tblSell" style="min-width:680px">
+        <thead><tr>
+          <th>Bán?</th><th>Mã CK</th><th>T.lệ vay</th><th>Đang giữ (CP)</th>
+          <th>Giá bán (đ)</th><th>KL bán</th><th>GT bán (đ)</th><th>Tiền trả nợ</th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot><tr>
+          <td colspan="6" style="text-align:right;font-weight:700;background:var(--total)">TỔNG</td>
+          <td class="calc total" id="sellTotGT">0</td>
+          <td class="calc total" id="sellTotCash">0</td>
+        </tr></tfoot>
+      </table>
+      <div class="hint" id="sellNoHoldings" style="display:none;color:#c0392b">
+        ⚠️ Chưa có mã nào trong danh mục (tab 1). Nhập danh mục trước để dùng công cụ này.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">KẾT QUẢ SAU KHI BÁN (mô phỏng)</div>
+      <div class="row"><label>Tổng GT bán (S)</label><div class="calc" id="rsS">0</div><span class="note">Σ KL × giá bán từng mã</span></div>
+      <div class="row"><label>Tiền thực trả nợ</label><div class="calc" id="rsCash">0</div><span class="note">= S × (1 − phí − thuế)</span></div>
+      <div class="row"><label>Phí + thuế bán mất đi</label><div class="calc" id="rsFee">0</div><span class="note">= S × (phí + thuế)</span></div>
+      <div class="row"><label>V sau bán</label><div class="calc" id="rsV">0</div><span class="note">= V − S</span></div>
+      <div class="row"><label>D sau bán</label><div class="calc" id="rsD">0</div><span class="note">= D − tiền trả nợ</span></div>
+      <div class="row"><label>Dư nợ max sau bán</label><div class="calc" id="rsDmax">0</div><span class="note">Room thay đổi do bán mã có margin</span></div>
+      <div class="row"><label>Room sau bán</label><div class="calc" id="rsRoom">0</div><span class="note">= Dmax − D (sau bán)</span></div>
+      <div class="row"><label><b>Rtt sau khi bán</b></label><div class="calc star" id="rsRtt">—</div><span class="note">= (E − S×phí) / (V − S)</span></div>
+      <div class="status" id="rsStatus" style="margin-top:10px">—</div>
+    </div>
+
     <div class="card">
       <div class="card-header">📌 GIẢI THÍCH</div>
       <div class="hint">• Nộp tiền: V↑, E↑, D không đổi → Rtt mới = (E+C)/(V+C)</div>
-      <div class="hint">• Bán CP trả nợ: V↓, D↓, E không đổi → Rtt mới = E/(V−S)</div>
-      <div class="hint">• C = D/(1−Rtt*) − V   |   S = V − E/Rtt*</div>
+      <div class="hint">• Bán CP trả nợ (có phí): V↓ đúng GT bán, D↓ theo tiền thực thu, E↓ đúng phần phí.</div>
+      <div class="hint">• Tổng GT bán cần để đạt Rtt* <b>không phụ thuộc bán mã nào</b>: S = (E − Rtt*·V)/(phí − Rtt*).</div>
+      <div class="hint">• Khác biệt giữa các mã là <b>Room/dư nợ max</b>: bán mã r cao → Dmax giảm nhiều hơn. Cân nhắc giữ mã có r cao nếu cần Room.</div>
+      <div class="hint">• C = D/(1−Rtt*) − V (không phí)  |  S = V − E/Rtt* (không phí)</div>
     </div>
   </section>
 
@@ -348,6 +398,6 @@
 
 </div>
 
-<script src="app.js?v=20260529-fmtaccount"></script>
+<script src="app.js?v=20260529-sellalloc"></script>
 </body>
 </html>

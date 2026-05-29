@@ -74,6 +74,7 @@ $$('.tab').forEach(t => t.onclick = () => {
   document.querySelector(`.panel[data-panel="${t.dataset.tab}"]`).classList.add('active');
   if (t.dataset.tab === 'caps') renderCaps();
   if (t.dataset.tab === 'muonhang') recalcMuon();
+  if (t.dataset.tab === 'viphm') renderSellTable();
 });
 
 // ── Load master + caps ─────────────────────────────────────
@@ -281,7 +282,7 @@ function recalcAll() {
   const V = totMV + cash;
   const E = V - D;
   const rtt = V > 0 ? E / V : 0;
-  STATE.account = { V, D, E, rtt, cash, totMV };
+  STATE.account = { V, D, E, rtt, cash, totMV, totDmax };
   const room = totDmax - D;
 
   // Tab 1 outputs
@@ -355,6 +356,7 @@ function recalcAll() {
 
   recalcBuy(V, D, room, cash);
   recalcDeals();
+  renderSellTable();
 }
 
 // ── Tab 3 buy section ──────────────────────────────────────
@@ -544,6 +546,191 @@ function recalcDeals() {
   $('d4Rtt').textContent = (Vafter4 > 0 && N4 > 0)
     ? fmtPct((Vafter4 - Dafter4) / Vafter4)
     : '—';
+}
+
+// ╔════════ TAB 2: Phân bổ bán theo từng mã (mô phỏng) ════════╗
+// Lưu lựa chọn bán theo mã: {SYM: {checked, qty, price}}. Giữ qua các lần render.
+STATE.sellPlan = STATE.sellPlan || {};
+
+// Danh sách holding hợp lệ (có mã + KL > 0) từ tab 1, gộp KL theo mã.
+function getSellableHoldings() {
+  const map = {};
+  for (const h of STATE.holdings) {
+    const sym = (h.sym || '').toUpperCase().trim();
+    if (!sym || !h.qty || h.qty <= 0) continue;
+    const pEval = evalPrice(sym, h.price);
+    if (!pEval || pEval <= 0) continue;
+    if (!map[sym]) map[sym] = { sym, qty: 0, price: pEval, r: h.r ?? getR(sym) };
+    map[sym].qty += h.qty;       // gộp nếu cùng mã ở nhiều dòng
+  }
+  return Object.values(map);
+}
+
+function renderSellTable() {
+  const tb = $('tblSell')?.querySelector('tbody');
+  if (!tb) return;
+  const holds = getSellableHoldings();
+  const fs = getFs();                       // phí + thuế bán
+  $('spFee').textContent = (fs * 100).toFixed(2).replace('.', ',') + '%';
+
+  // Dọn sellPlan: bỏ mã không còn trong danh mục
+  const validSyms = new Set(holds.map(h => h.sym));
+  for (const s of Object.keys(STATE.sellPlan)) if (!validSyms.has(s)) delete STATE.sellPlan[s];
+
+  $('sellNoHoldings').style.display = holds.length ? 'none' : '';
+
+  tb.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  for (const h of holds) {
+    const plan = STATE.sellPlan[h.sym] || { checked: false, qty: 0, price: h.price };
+    // Giá bán mặc định = giá đánh giá; KL bán kẹp trong KL đang giữ
+    const sellPrice = plan.price || h.price;
+    const sellQty   = Math.min(plan.qty || 0, h.qty);
+    const gt        = plan.checked ? sellQty * sellPrice : 0;
+    const cash      = gt * (1 - fs);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="text-align:center"><input type="checkbox" data-sym="${h.sym}" data-f="checked" ${plan.checked ? 'checked' : ''}></td>
+      <td style="font-weight:700;color:#1F3864;text-align:center">${h.sym}</td>
+      <td style="text-align:center">${(h.r*100).toFixed(0)}%</td>
+      <td style="text-align:right">${fmtNum(h.qty)}</td>
+      <td><input type="text" inputmode="numeric" data-num data-sym="${h.sym}" data-f="price" value="${fmtNumInput(sellPrice)}" style="width:120px"></td>
+      <td><input type="text" inputmode="numeric" data-num data-sym="${h.sym}" data-f="qty" value="${fmtNumInput(sellQty)}" style="width:110px"></td>
+      <td class="calc" style="text-align:right">${gt ? fmtVND(gt) : '0'}</td>
+      <td class="calc" style="text-align:right">${cash ? fmtVND(cash) : '0'}</td>
+    `;
+    frag.appendChild(tr);
+  }
+  tb.appendChild(frag);
+
+  recalcSell();
+}
+
+function recalcSell() {
+  const acc = STATE.account || { V:0, D:0, E:0, totDmax:0 };
+  const { V, D, E } = acc;
+  const fs = getFs();
+  const holds = getSellableHoldings();
+
+  // Tổng GT bán + tiền trả nợ; đồng thời tính Dmax giảm do bán mã có margin
+  let S = 0, dmaxDrop = 0;
+  for (const h of holds) {
+    const plan = STATE.sellPlan[h.sym];
+    if (!plan || !plan.checked) continue;
+    const q  = Math.min(plan.qty || 0, h.qty);
+    const px = plan.price || h.price;
+    const gt = q * px;
+    S += gt;
+    // Bán q cp mã này → mất GT đánh giá q·px, giảm Dmax = (q·px)·r (kẹp theo limit không xét ở mức mã đơn lẻ)
+    dmaxDrop += gt * h.r;
+  }
+  const cash = S * (1 - fs);            // tiền thực trả nợ
+  const fee  = S * fs;                  // phí + thuế mất đi
+  const Vafter = V - S;
+  const Dafter = Math.max(0, D - cash);
+  const Eafter = Vafter - Dafter;       // = E − S·fs
+  const rttAfter = Vafter > 0 ? Eafter / Vafter : 0;
+  const dmaxAfter = Math.max(0, (acc.totDmax || 0) - dmaxDrop);
+  const roomAfter = dmaxAfter - Dafter;
+
+  $('sellTotGT').textContent   = fmtVND(S);
+  $('sellTotCash').textContent = fmtVND(cash);
+  $('rsS').textContent    = fmtVND(S);
+  $('rsCash').textContent = fmtVND(cash);
+  $('rsFee').textContent  = fmtVND(fee);
+  $('rsV').textContent    = fmtVND(Vafter);
+  $('rsD').textContent    = fmtVND(Dafter);
+  $('rsDmax').textContent = fmtVND(dmaxAfter);
+  $('rsRoom').textContent = fmtVND(roomAfter);
+  $('rsRtt').textContent  = S > 0 ? fmtPct(rttAfter) : '—';
+
+  // Trạng thái so mục tiêu
+  const target = +$('sellTarget').value || 0.35;
+  const stEl = $('rsStatus');
+  if (S <= 0) {
+    stEl.textContent = '— (chọn mã & nhập KL bán để mô phỏng)';
+    stEl.className = 'status';
+  } else if (rttAfter >= target) {
+    stEl.textContent = `✅ Đạt mục tiêu Rtt ≥ ${(target*100)|0}% (sau bán: ${fmtPct(rttAfter)})`;
+    stEl.className = 'status safe';
+  } else {
+    // còn thiếu bao nhiêu GT bán nữa để đạt target (công thức có phí)
+    const needS = (fs - target) !== 0 ? (E - target*V)/(fs - target) : 0;
+    const more  = Math.max(0, needS - S);
+    stEl.textContent = `⚠️ Chưa đủ — Rtt sau bán ${fmtPct(rttAfter)} < ${(target*100)|0}%. Cần bán thêm ~${fmtVND(more)} đ GT nữa.`;
+    stEl.className = 'status watch';
+  }
+}
+
+// Tự chia KL bán theo thứ tự mã đang được tick, đủ để đạt mục tiêu Rtt.
+// Tổng GT bán cần (có phí): S* = (E − Rtt*·V)/(fs − Rtt*).
+function autoFillSell() {
+  const acc = STATE.account || { V:0, D:0, E:0 };
+  const { V, E } = acc;
+  const fs = getFs();
+  const target = +$('sellTarget').value || 0.35;
+  const denom = fs - target;
+  let needS = denom !== 0 ? (E - target*V)/denom : 0;
+  needS = Math.max(0, needS);
+
+  const holds = getSellableHoldings();
+  // Chỉ chia cho các mã đang tick; nếu chưa tick mã nào → tick tất cả theo thứ tự bảng
+  let checkedSyms = holds.filter(h => STATE.sellPlan[h.sym]?.checked).map(h => h.sym);
+  if (!checkedSyms.length) {
+    holds.forEach(h => { STATE.sellPlan[h.sym] = { ...(STATE.sellPlan[h.sym]||{}), checked: true, price: h.price }; });
+    checkedSyms = holds.map(h => h.sym);
+  }
+
+  let remain = needS;
+  for (const h of holds) {
+    if (!checkedSyms.includes(h.sym)) continue;
+    const plan = STATE.sellPlan[h.sym] || { checked: true, price: h.price };
+    const px = plan.price || h.price;
+    if (remain <= 0 || px <= 0) { plan.qty = 0; STATE.sellPlan[h.sym] = plan; continue; }
+    const maxGT = h.qty * px;                 // bán hết mã này
+    const takeGT = Math.min(remain, maxGT);
+    // làm tròn KL lên bội số 100 cho đủ (không bán lẻ dưới lô)
+    let q = Math.ceil(takeGT / px / 100) * 100;
+    q = Math.min(q, h.qty);                    // không vượt KL đang giữ
+    plan.qty = q;
+    plan.checked = true;
+    STATE.sellPlan[h.sym] = plan;
+    remain -= q * px;
+  }
+  renderSellTable();
+}
+
+// Wiring cho bảng bán (event delegation)
+function wireSellTable() {
+  const tbl = $('tblSell');
+  if (!tbl) return;
+  tbl.addEventListener('input', e => {
+    const t = e.target; const sym = t.dataset.sym; if (!sym) return;
+    const f = t.dataset.f;
+    STATE.sellPlan[sym] = STATE.sellPlan[sym] || { checked:false, qty:0, price:0 };
+    if (f === 'checked')      STATE.sellPlan[sym].checked = t.checked;
+    else if (f === 'qty')     STATE.sellPlan[sym].qty   = parseNum(t.value);
+    else if (f === 'price')   STATE.sellPlan[sym].price = parseNum(t.value);
+    recalcSell();
+    // cập nhật riêng 2 ô GT/tiền của dòng đó để không reset caret khi đang gõ
+    if (f === 'qty' || f === 'price') {
+      const row = t.closest('tr');
+      const p = STATE.sellPlan[sym];
+      const holds = getSellableHoldings().find(h => h.sym === sym);
+      const q = Math.min(p.qty||0, holds?.qty||0);
+      const gt = p.checked ? q * (p.price||holds?.price||0) : 0;
+      const cells = row.querySelectorAll('td.calc');
+      if (cells[0]) cells[0].textContent = gt ? fmtVND(gt) : '0';
+      if (cells[1]) cells[1].textContent = gt ? fmtVND(gt*(1-getFs())) : '0';
+    }
+  });
+  // checkbox dùng change để chắc ăn
+  tbl.addEventListener('change', e => {
+    if (e.target.dataset.f === 'checked') renderSellTable();
+  });
+  $('btnAutoFill').onclick  = autoFillSell;
+  $('btnClearSell').onclick = () => { STATE.sellPlan = {}; renderSellTable(); };
+  $('sellTarget').addEventListener('change', recalcSell);
 }
 
 // ╔════════════════ TAB 5: Mượn hàng ═════════════════════════╗
@@ -775,6 +962,9 @@ $('capExch').oninput   = renderCaps;
 
 ['d1Sym','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
 $('bSym').addEventListener('change', onBuySymBlur);
+
+// ── Tab 2: Phân bổ bán theo mã ─────────────────────────────
+wireSellTable();
 
 // ── Tab 5: Mượn hàng wiring ────────────────────────────────
 ['mQty','mPrice','mFee','mTax','mFeeBorrow','mFeeAdvance']

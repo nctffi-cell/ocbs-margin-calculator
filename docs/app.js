@@ -380,20 +380,20 @@ function recalcBuy(V, D, room, cash) {
   // ── KL tối đa = min của các HẠN MỨC DƯ NỢ, quy ra GT lệnh ──────────────
   // Mua bằng vay margin: phần vay = GT·r. CP mua về + vốn chủ sẵn có làm TS đảm bảo
   // cho phần (1−r) → KHÔNG bắt buộc tiền mặt. Tiền mặt (nếu có) tăng thêm sức mua.
-  //   (1) HM 1 mã (Phụ lục 1): dư nợ mã này ≤ limit_mã  → GT ≤ limit_mã / r
-  //   (2) HM tài khoản: tổng dư nợ sau mua ≤ 81 tỷ → vay mới ≤ 81tỷ − D → GT ≤ (81tỷ−D)/r
-  //   (3) Tiền mặt: phần vốn tự có (1−r) có thể trả thêm bằng cash → GT thêm cash/(1−r)
+  // MÔ HÌNH MARGIN CHUẨN: mua GT lệnh X = vốn tự có (1−r)·X (từ TIỀN MẶT) + vay r·X.
+  //   GT lệnh X bị kẹp bởi 4 ràng buộc, lấy min:
+  //   (1) Tiền mặt: vốn tự có (1−r)·X ≤ cash       → X ≤ cash/(1−r)
+  //   (2) HM 1 mã (Phụ lục 1): vay r·X ≤ limit_mã  → X ≤ limit_mã/r
+  //   (3) HM tài khoản: vay r·X ≤ 81tỷ−D           → X ≤ (81tỷ−D)/r
+  //   (4) Rtt sau ≥ 50%
   const lim       = getStockLimit(sym);                 // HM 1 mã (null nếu không có)
   const acctRoom  = Math.max(0, getMaxLoan() - D);      // hạn mức nợ còn lại toàn TK
-  const loanCap   = (lim != null) ? Math.min(acctRoom, lim) : acctRoom;  // dư nợ mới tối đa cho mã này
-  const bpStock   = (lim != null && r > 0) ? lim / r : Infinity;         // GT chặn bởi HM 1 mã
-  const bpAcct    = r > 0 ? acctRoom / r : Infinity;                     // GT chặn bởi HM 81 tỷ
-  const bpLoan    = r > 0 ? loanCap / r : 0;            // GT vay tối đa (đã min 2 hạn mức)
-  const bpCash    = r < 1 ? cash / (1 - r) : 0;         // GT thêm nhờ tiền mặt
+  const bpCash    = r < 1 ? cash / (1 - r) : Infinity;  // (1) GT chặn bởi tiền mặt
+  const bpStock   = (lim != null && r > 0) ? lim / r : Infinity;   // (2) GT chặn bởi HM 1 mã
+  const bpAcct    = r > 0 ? acctRoom / r : Infinity;    // (3) GT chặn bởi HM 81 tỷ
 
-  // Ràng buộc Rtt ≥ 50%: sau mua GT lệnh X, Rtt' = (E + X(1−r))/(V+X) ≥ 0.5.
-  //   X·(0.5−r) ≥ 0.5V − E. Với r > 0.5 (hệ số 0.5−r < 0): X ≤ (E − 0.5V)/(r − 0.5) → TRẦN.
-  //   Với r ≤ 0.5: mua margin chỉ đưa Rtt hội tụ về (1−r) ≥ 50% → luôn thỏa (không chặn).
+  // (4) Ràng buộc Rtt ≥ 50%: sau mua GT lệnh X, Rtt' = (E + X(1−r) − phí)/(V+X) ≥ 0.5.
+  //   Bỏ phí cho gọn: X·(0.5−r) ≥ 0.5V − E. r>0.5 → X ≤ (E−0.5V)/(r−0.5). r≤0.5 → luôn thỏa.
   const E = V - D;
   let bpRtt = Infinity;
   if (r > 0.5 + 1e-12) {
@@ -401,24 +401,27 @@ function recalcBuy(V, D, room, cash) {
     bpRtt = x > 0 ? x : 0;                              // Rtt hiện đã <50% thì không mua thêm được
   }
 
-  // GT lệnh tối đa = min(các hạn mức vay) + tiền mặt, NHƯNG không vượt ràng buộc Rtt≥50%.
-  const bpByLimits = bpLoan + bpCash;                   // chặn bởi HM vay + cash
-  const bpTotal    = Math.min(bpByLimits, bpRtt);       // kẹp thêm ràng buộc Rtt≥50%
+  // GT lệnh tối đa = min của cả 4 ràng buộc.
+  const bpTotal = Math.min(bpCash, bpStock, bpAcct, bpRtt);
+  const bpLoan  = Math.min(bpStock, bpAcct) * r;        // dư nợ tối đa cho phép (để hiển thị tham khảo)
 
   const qtyMax = price > 0 ? Math.floor(bpTotal / price / 100) * 100 : 0;
   const fee    = qtyMax * price * fb;
   const loan   = qtyMax * price * r;
 
-  // Yếu tố đang chặn KL (so theo GT lệnh). Ưu tiên báo Rtt nếu nó là ràng buộc chặt nhất.
-  let boundBy = 'HM tài khoản (81 tỷ)';
-  if (bpStock < bpAcct - 1) boundBy = 'HM 1 mã (Phụ lục 1)';
-  if (bpRtt < bpByLimits - 1) boundBy = 'Rtt ≥ 50%';
-  if (!isFinite(bpStock) && !isFinite(bpAcct) && !isFinite(bpRtt)) boundBy = '—';
+  // Yếu tố đang chặn KL = ràng buộc có GT lệnh nhỏ nhất.
+  const constraints = [
+    { v: bpCash,  name: 'Tiền mặt (vốn tự có)' },
+    { v: bpStock, name: 'HM 1 mã (Phụ lục 1)' },
+    { v: bpAcct,  name: 'HM tài khoản (81 tỷ)' },
+    { v: bpRtt,   name: 'Rtt ≥ 50%' },
+  ].sort((a, b) => a.v - b.v);
+  const boundBy = isFinite(constraints[0].v) ? constraints[0].name : '—';
 
   // Cảnh báo khi HM 1 mã là ràng buộc chặt hơn HM tài khoản
   showLimitWarn('bLimitRow', 'bLimitWarn', lim != null && lim < acctRoom, lim, acctRoom);
-  $('bBpRoom').textContent  = fmtVND(bpLoan);
-  $('bBpCash').textContent  = fmtVND(bpCash);
+  $('bBpRoom').textContent  = isFinite(bpLoan) ? fmtVND(bpLoan) : '—';
+  $('bBpCash').textContent  = isFinite(bpCash) ? fmtVND(bpCash) : '—';
   $('bBpTotal').textContent = fmtVND(bpTotal);
   $('bQtyMax').textContent  = fmtNum(qtyMax);
   $('bFee').textContent     = fmtVND(fee);

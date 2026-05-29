@@ -140,6 +140,19 @@ function getStockLimit(sym) {
   const m = STATE.master[(sym||'').toUpperCase()];
   return (m && m.limit) ? m.limit : null;
 }
+// Hiện/ẩn dòng cảnh báo chạm Hạn mức tối đa 1 mã (limit).
+// rowId/warnId: id dòng + ô text. capped: true nếu dư nợ đã bị kẹp. lim: trần. raw: dư nợ trước kẹp.
+function showLimitWarn(rowId, warnId, capped, lim, raw) {
+  const row = $(rowId), warn = $(warnId);
+  if (!row || !warn) return;
+  if (capped) {
+    row.style.display = '';
+    warn.textContent = `Trần ${fmtVND(lim)} (lý thuyết ${fmtVND(raw)})`;
+  } else {
+    row.style.display = 'none';
+    warn.textContent = '';
+  }
+}
 // Giá đánh giá = MIN(giá TT, giá chặn trên). Nếu chặn null → dùng giá TT
 function evalPrice(sym, marketPrice) {
   const cap = getCapHigh(sym);
@@ -359,12 +372,17 @@ function recalcBuy(V, D, room, cash) {
   const fb    = getFb();
 
   $('bR').textContent = (r*100).toFixed(0) + '%';
-  const bpRoom  = r > 0 ? room / r : 0;
+  // Hạn mức tối đa 1 mã: phần vay margin cho mã này không vượt quá min(room tổng, limit/mã).
+  const lim     = getStockLimit(sym);
+  const loanCap = (lim != null) ? Math.min(room, lim) : room;
+  const bpRoom  = r > 0 ? loanCap / r : 0;
   const bpCash  = r < 1 ? cash / (1 - r) : cash;
   const bpTotal = Math.min(bpRoom, bpCash) + cash;
   const qtyMax  = price > 0 ? Math.floor(bpTotal / price / 100) * 100 : 0;
   const fee     = qtyMax * price * fb;
   const loan    = qtyMax * price * r;
+  // Cảnh báo nếu limit là ràng buộc chặt hơn room (tức limit thực sự cắt giảm sức mua)
+  showLimitWarn('bLimitRow', 'bLimitWarn', lim != null && lim < room, lim, room);
   $('bBpRoom').textContent  = fmtVND(bpRoom);
   $('bBpCash').textContent  = fmtVND(bpCash);
   $('bBpTotal').textContent = fmtVND(bpTotal);
@@ -436,9 +454,14 @@ function recalcDeals() {
   // Deal 1
   const N1 = getNumVal('d1N'), P1 = getNumVal('d1P');
   const V1 = N1 * P1;
-  const X1 = V1 * rp / (1 + fb);
+  let X1 = V1 * rp / (1 + fb);
+  let debt1 = X1 * (1 + fb);           // = V1 · rp
+  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ phát sinh không vượt limit của mã d1Sym
+  const lim1 = getStockLimit($('d1Sym').value);
+  const cap1 = lim1 != null && debt1 > lim1;
+  if (cap1) { debt1 = lim1; X1 = lim1 / (1 + fb); }
   const cash1 = X1 * (1 - fs);
-  const debt1 = X1 * (1 + fb);
+  showLimitWarn('d1LimitRow', 'd1LimitWarn', cap1, lim1, V1 * rp);
   $('d1V').textContent   = fmtVND(V1);
   $('d1X').textContent   = fmtVND(X1);
   $('d1Cash').textContent= fmtVND(cash1);
@@ -447,26 +470,42 @@ function recalcDeals() {
 
   // Deal 2
   const Y = getNumVal('d2Y'), P2 = getNumVal('d2P');
-  const Vneed2 = (rp>0 && (1-fs)>0) ? Y * (1+fb) / (rp * (1-fs)) : 0;
+  let Vneed2 = (rp>0 && (1-fs)>0) ? Y * (1+fb) / (rp * (1-fs)) : 0;
+  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ phát sinh = Vreal2·rp không vượt limit
+  // → V tối đa = limit/rp. Nếu Vneed2 vượt ngưỡng này thì không rút đủ Y bằng 1 mã.
+  const lim2 = getStockLimit($('d2Sym').value);
+  const cap2 = lim2 != null && rp > 0 && Vneed2 * rp > lim2;
+  if (cap2) Vneed2 = lim2 / rp;        // V bị kẹp ở mức tạo dư nợ = limit
   const N2 = P2>0 ? Math.ceil(Vneed2 / P2 / 100) * 100 : 0;
-  const Vreal2 = N2 * P2;
-  const X2 = Vreal2 * rp / (1 + fb);
+  let Vreal2 = N2 * P2;
+  let debt2 = Vreal2 * rp;
+  // N2 làm tròn LÊN có thể đẩy debt vượt limit lần nữa → kẹp lại debt và tiền rút theo limit
+  if (lim2 != null && debt2 > lim2) debt2 = lim2;
+  const X2 = debt2 / (1 + fb);
+  showLimitWarn('d2LimitRow', 'd2LimitWarn', cap2, lim2, (rp>0 ? Y*(1+fb)/(rp*(1-fs)) : 0) * rp);
   $('d2V').textContent    = fmtVND(Vneed2);
   $('d2N').textContent    = fmtNum(N2);
   $('d2Vreal').textContent= fmtVND(Vreal2);
   $('d2Cash').textContent = fmtVND(X2 * (1 - fs));
-  $('d2Debt').textContent = fmtVND(X2 * (1 + fb));
+  $('d2Debt').textContent = fmtVND(debt2);
 
   // Deal 3
   const Z = getNumVal('d3Z'), P3 = getNumVal('d3P');
-  const Vneed3 = rp > 0 ? Z / rp : 0;
+  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ mong muốn Z không thể vượt limit bằng 1 mã.
+  const lim3 = getStockLimit($('d3Sym').value);
+  const cap3 = lim3 != null && Z > lim3;
+  const Zeff = cap3 ? lim3 : Z;        // dư nợ thực tế đạt được
+  const Vneed3 = rp > 0 ? Zeff / rp : 0;
   const N3 = P3>0 ? Math.ceil(Vneed3 / P3 / 100) * 100 : 0;
   const Vreal3 = N3 * P3;
-  const X3 = Vreal3 * rp / (1 + fb);
+  let debt3 = Vreal3 * rp;
+  if (lim3 != null && debt3 > lim3) debt3 = lim3;   // N3 tròn lên không vượt trần
+  const X3 = debt3 / (1 + fb);
+  showLimitWarn('d3LimitRow', 'd3LimitWarn', cap3, lim3, Z);
   $('d3V').textContent    = fmtVND(Vneed3);
   $('d3N').textContent    = fmtNum(N3);
   $('d3Cash').textContent = fmtVND(X3 * (1 - fs));
-  $('d3Debt').textContent = fmtVND(X3 * (1 + fb));
+  $('d3Debt').textContent = fmtVND(debt3);
 
   // Deal 4: Nộp X tiền mặt → mua tối đa N cp mã Y
   // OCBS cho vay theo giá tham chiếu (Pref), còn user trả tiền theo giá mua (Pbuy).
@@ -478,7 +517,15 @@ function recalcDeals() {
   const P4buy = getNumVal('d4Pbuy') || P4ref;
   const perShareCash = P4buy * (1 + fb) - P4ref * rp;  // tiền mặt cần cho 1 cp
   const Nmax4 = (perShareCash > 0) ? X4 / perShareCash : 0;
-  const N4 = Math.max(0, Math.floor(Nmax4 / 100) * 100);
+  let N4 = Math.max(0, Math.floor(Nmax4 / 100) * 100);
+  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ N4·Pref·rp không vượt limit của mã d4Sym
+  const lim4 = getStockLimit($('d4Sym').value);
+  const cap4 = lim4 != null && rp > 0 && P4ref > 0 && N4 * P4ref * rp > lim4;
+  if (cap4) {
+    const nByLimit = Math.floor(lim4 / (P4ref * rp) / 100) * 100;
+    N4 = Math.max(0, Math.min(N4, nByLimit));
+  }
+  showLimitWarn('d4LimitRow', 'd4LimitWarn', cap4, lim4, Math.floor(Nmax4/100)*100 * P4ref * rp);
   const Vcost4   = N4 * P4buy;            // chi phí mua (giá đặt)
   const VrefVal4 = N4 * P4ref;            // giá trị stock để tính Rtt (giá TC)
   const debt4    = VrefVal4 * rp;         // dư nợ vay margin

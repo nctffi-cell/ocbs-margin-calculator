@@ -157,6 +157,7 @@
       <div class="row"><label>KL tối đa có thể đặt</label><div class="calc" id="bQtyMax">0</div><span class="note">làm tròn xuống 100</span></div>
       <div class="row"><label>Phí mua ước tính</label><div class="calc" id="bFee">0</div><span></span></div>
       <div class="row"><label>Tiền vay dự kiến</label><div class="calc" id="bLoan">0</div><span></span></div>
+      <div class="row" id="bLimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="bLimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Đã chạm trần HM 1 mã</span></div>
       <div class="row"><label><b>Rtt sau khi mua</b></label><div class="calc star" id="bRttAfter">—</div><span></span></div>
     </div>
 
@@ -199,6 +200,7 @@
       <div class="row"><label>GT lệnh mua/bán</label><div class="calc" id="d1X">0</div><span class="note">= V·r'/(1+f_b)</span></div>
       <div class="row"><label><b>▶ TIỀN RÚT TỐI ĐA</b></label><div class="calc star" id="d1Cash">0</div><span class="note">= X·(1−f_s)</span></div>
       <div class="row"><label>Dư nợ còn lại</label><div class="calc" id="d1Debt">0</div><span class="note">= X·(1+f_b)</span></div>
+      <div class="row" id="d1LimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="d1LimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Đã chạm trần — kết quả đã kẹp</span></div>
       <div class="row"><label>Rtt verify</label><div class="calc" id="d1Rtt">—</div><span></span></div>
     </div>
 
@@ -212,6 +214,7 @@
       <div class="row"><label>V thực tế</label><div class="calc" id="d2Vreal">0</div><span></span></div>
       <div class="row"><label>Tiền rút thực tế</label><div class="calc" id="d2Cash">0</div><span></span></div>
       <div class="row"><label>Dư nợ phát sinh</label><div class="calc" id="d2Debt">0</div><span></span></div>
+      <div class="row" id="d2LimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="d2LimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Đã chạm trần — kết quả đã kẹp</span></div>
     </div>
 
     <div class="card">
@@ -223,6 +226,7 @@
       <div class="row"><label><b>▶ SỐ CP CẦN LƯU KÝ</b></label><div class="calc star" id="d3N">0</div><span></span></div>
       <div class="row"><label>Tiền rút tương ứng</label><div class="calc" id="d3Cash">0</div><span></span></div>
       <div class="row"><label>Dư nợ thực tế</label><div class="calc" id="d3Debt">0</div><span></span></div>
+      <div class="row" id="d3LimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="d3LimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Z vượt trần HM 1 mã — kết quả đã kẹp</span></div>
     </div>
 
     <div class="card">
@@ -237,6 +241,7 @@
       <div class="row"><label>Tiền mặt thực dùng</label><div class="calc" id="d4Cash">0</div><span class="note">= N·[Pmua·(1+f_b) − Pref·r']</span></div>
       <div class="row"><label>Dư nợ phát sinh</label><div class="calc" id="d4Debt">0</div><span class="note">= N · Pref · r'</span></div>
       <div class="row"><label>Tiền dư (chưa dùng)</label><div class="calc" id="d4Rem">0</div><span class="note">= X − tiền thực dùng</span></div>
+      <div class="row" id="d4LimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="d4LimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Đã chạm trần — KL mua đã kẹp</span></div>
       <div class="row"><label><b>Rtt sau khi mua</b></label><div class="calc star" id="d4Rtt">—</div><span class="note">= (V_sau − D_sau) / V_sau, cộng dồn danh mục Tab 1</span></div>
     </div>
   </section>
@@ -290,6 +295,6 @@
 
 </div>
 
-<script src="app.js?v=20260528-2332"></script>
+<script src="app.js?v=20260529-limit"></script>
 </body>
 </html>

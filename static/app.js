@@ -378,9 +378,13 @@ function recalcBuy(V, D, room, cash) {
   // Hạn mức tối đa 1 mã: phần vay margin cho mã này không vượt quá min(room tổng, limit/mã).
   const lim     = getStockLimit(sym);
   const loanCap = (lim != null) ? Math.min(room, lim) : room;
+  // Sức mua = phần mua bằng Room (vay margin) + phần mua bằng tiền mặt (vốn tự có).
+  //   - Room/r: GT lệnh tối đa mà phần vay X·r vừa khít Room (CP danh mục làm TS đảm bảo).
+  //   - cash/(1−r): GT lệnh thêm mà phần vốn tự có X·(1−r) vừa khít tiền mặt.
+  // Hai nguồn cộng hưởng (không lấy min, không double-count cash).
   const bpRoom  = r > 0 ? loanCap / r : 0;
   const bpCash  = r < 1 ? cash / (1 - r) : cash;
-  const bpTotal = Math.min(bpRoom, bpCash) + cash;
+  const bpTotal = bpRoom + bpCash;
   const qtyMax  = price > 0 ? Math.floor(bpTotal / price / 100) * 100 : 0;
   const fee     = qtyMax * price * fb;
   const loan    = qtyMax * price * r;

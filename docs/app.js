@@ -384,10 +384,27 @@ function recalcBuy(V, D, room, cash) {
   // Hai nguồn cộng hưởng (không lấy min, không double-count cash).
   const bpRoom  = r > 0 ? loanCap / r : 0;
   const bpCash  = r < 1 ? cash / (1 - r) : cash;
-  const bpTotal = bpRoom + bpCash;
-  const qtyMax  = price > 0 ? Math.floor(bpTotal / price / 100) * 100 : 0;
+  const bpTotal = bpRoom + bpCash;                      // GT lệnh tối đa theo Room + Cash
+
+  // Ràng buộc Rtt = 50% (IM): GT lệnh X sao cho Rtt sau = 0.5. Mua margin r kéo Rtt
+  //   hội tụ về (1−r); chỉ chạm 50% nếu 50% nằm giữa Rtt hiện tại và (1−r).
+  //   X = (0.5·V − E)/(1 − r − 0.5). Nếu vô nghiệm/không khả thi → coi như +∞ (Room chặn).
+  const E = V - D;
+  const tIM = 0.5;
+  const denomIM = 1 - r - tIM;
+  let bpRtt = Infinity;
+  if (Math.abs(denomIM) > 1e-12) {
+    const x = (tIM * V - E) / denomIM;
+    if (x > 0) bpRtt = x;                                // nghiệm dương mới có ý nghĩa chặn
+  }
+
+  // KL tối đa = min(ràng buộc Room+Cash, ràng buộc Rtt=50%). Lấy GT nhỏ hơn rồi quy ra KL.
+  const bpEffective = Math.min(bpTotal, bpRtt);
+  const qtyMax  = price > 0 ? Math.floor(bpEffective / price / 100) * 100 : 0;
   const fee     = qtyMax * price * fb;
   const loan    = qtyMax * price * r;
+  // Yếu tố đang chặn KL max (để hiển thị cho user hiểu vì sao Rtt sau chưa = 50%)
+  const boundBy = (bpRtt < bpTotal - 1) ? 'Rtt=50%' : 'Room';
   // Cảnh báo nếu limit là ràng buộc chặt hơn room (tức limit thực sự cắt giảm sức mua)
   showLimitWarn('bLimitRow', 'bLimitWarn', lim != null && lim < room, lim, room);
   $('bBpRoom').textContent  = fmtVND(bpRoom);
@@ -399,27 +416,20 @@ function recalcBuy(V, D, room, cash) {
   const Vafter = V + qtyMax * price;
   const Dafter = D + loan;
   $('bRttAfter').textContent = Vafter > 0 ? fmtPct((Vafter - Dafter) / Vafter) : '—';
+  if ($('bBoundBy')) $('bBoundBy').textContent = qtyMax > 0 ? boundBy : '—';
 
-  // KL nếu để Rtt về 50% (IM). Mua margin r → Rtt hội tụ về (1−r), không xuống thấp hơn.
-  //   Sau mua GT lệnh X: V'=V+X, D'=D+X·r, E'=E+X·(1−r). Rtt'=(E+X(1−r))/(V+X).
-  //   Đặt Rtt'=t → X=(t·V−E)/(1−r−t). Khả thi khi t>(1−r) (mẫu>0) và X>0.
-  // Mua margin GT lệnh X mã r: Rtt' = (E+X(1−r))/(V+X), khi X→∞ hội tụ về (1−r).
-  //   Đạt target t khi t nằm GIỮA rttNow và (1−r): X = (t·V−E)/(1−r−t), với X>0.
-  //   • Nếu rttNow ≤ t: đã đạt, không cần mua.
-  //   • Nếu t ≤ (1−r) < rttNow: mua chỉ tiệm cận (1−r), không chạm t → không khả thi.
-  const E = V - D;
+  // Dòng giải thích "KL để Rtt về 50%": cho biết ràng buộc Rtt có khả thi không.
+  //   Mua margin r → Rtt hội tụ về (1−r). Chỉ chạm 50% nếu (1−r) < 50% < Rtt hiện tại.
   const rttNow = V > 0 ? E / V : 0;
-  const tIM = 0.5;                       // mục tiêu Rtt 50%
   const converge = 1 - r;                // ngưỡng Rtt hội tụ khi mua vô hạn
-  const denom = converge - tIM;          // = 1 − r − tIM
   if (rttNow <= tIM + 1e-9) {
     $('bQtyByRtt').textContent = 'Rtt hiện đã ≤ 50% — không cần mua';
   } else if (tIM <= converge + 1e-9) {
-    // target ≤ ngưỡng hội tụ: mua margin không thể kéo Rtt xuống tới 50%
-    $('bQtyByRtt').textContent = `Mua margin chỉ đưa Rtt → ${(converge*100)|0}% (không xuống 50% được)`;
-  } else if (price > 0 && Math.abs(denom) > 1e-12) {
-    const Xrtt = (tIM * V - E) / denom;   // denom<0 và (tV−E)<0 → X>0
-    $('bQtyByRtt').textContent = Xrtt > 0 ? fmtNum(Math.floor(Xrtt / price / 100) * 100) : 'Rtt hiện đã ≤ 50% — không cần mua';
+    // 50% ≤ (1−r): mua margin chỉ tiệm cận (1−r), KHÔNG kéo Rtt xuống 50% được
+    $('bQtyByRtt').textContent = `Mua margin r=${(r*100)|0}% chỉ đưa Rtt → ${(converge*100)|0}% (không xuống 50%)`;
+  } else if (bpRtt !== Infinity) {
+    // khả thi: 50% nằm giữa (1−r) và Rtt hiện tại
+    $('bQtyByRtt').textContent = price > 0 ? fmtNum(Math.floor(bpRtt / price / 100) * 100) : '—';
   } else {
     $('bQtyByRtt').textContent = '—';
   }

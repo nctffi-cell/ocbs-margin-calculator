@@ -205,12 +205,13 @@
       <div class="row"><label>Sức mua từ Room</label><div class="calc" id="bBpRoom">0</div><span class="note">= Room / T.lệ Margin</span></div>
       <div class="row"><label>Sức mua từ Cash</label><div class="calc" id="bBpCash">0</div><span class="note">= M / (1−T.lệ)</span></div>
       <div class="row"><label><b>Sức mua TỔNG (GT lệnh)</b></label><div class="calc star" id="bBpTotal">0</div><span></span></div>
-      <div class="row"><label>KL tối đa (chặn bởi Room)</label><div class="calc" id="bQtyMax">0</div><span class="note">làm tròn xuống 100 — hết hạn mức vay</span></div>
-      <div class="row"><label>KL nếu để Rtt về 50% (IM)</label><div class="calc" id="bQtyByRtt">0</div><span class="note">Mua đến khi Rtt=50% (có thể vượt Room)</span></div>
-      <div class="row"><label>Phí mua ước tính</label><div class="calc" id="bFee">0</div><span class="note">theo KL tối đa (Room)</span></div>
-      <div class="row"><label>Tiền vay dự kiến</label><div class="calc" id="bLoan">0</div><span class="note">theo KL tối đa (Room)</span></div>
+      <div class="row"><label><b>KL tối đa có thể đặt</b></label><div class="calc star" id="bQtyMax">0</div><span class="note">= min(chặn bởi Room, chặn bởi Rtt=50%), làm tròn 100</span></div>
+      <div class="row"><label>↳ Đang bị chặn bởi</label><div class="calc" id="bBoundBy">—</div><span class="note">Yếu tố giới hạn KL: Room (hạn mức vay) hay Rtt=50%</span></div>
+      <div class="row"><label>KL nếu để Rtt về 50% (IM)</label><div class="calc" id="bQtyByRtt">0</div><span class="note">Mua đến khi Rtt=50% (tham khảo)</span></div>
+      <div class="row"><label>Phí mua ước tính</label><div class="calc" id="bFee">0</div><span class="note">theo KL tối đa</span></div>
+      <div class="row"><label>Tiền vay dự kiến</label><div class="calc" id="bLoan">0</div><span class="note">theo KL tối đa</span></div>
       <div class="row" id="bLimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="bLimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Đã chạm trần HM 1 mã</span></div>
-      <div class="row"><label><b>Rtt sau khi mua (KL max)</b></label><div class="calc star" id="bRttAfter">—</div><span class="note">theo KL tối đa (Room)</span></div>
+      <div class="row"><label><b>Rtt sau khi mua (KL max)</b></label><div class="calc star" id="bRttAfter">—</div><span class="note">theo KL tối đa</span></div>
 
       <div class="section-sub" style="margin-top:14px">↓ NHẬP KL TÙY CHỌN ĐỂ MÔ PHỎNG</div>
       <div class="row"><label>KL muốn mua (tùy chọn)</label><input id="bQtyChoose" type="text" inputmode="numeric" data-num value="0"><span class="note">Để 0 = dùng KL tối đa ở trên</span></div>
@@ -408,6 +409,6 @@
 
 </div>
 
-<script src="app.js?v=20260529-buyqty"></script>
+<script src="app.js?v=20260529-buymin"></script>
 </body>
 </html>

@@ -432,18 +432,45 @@ function recalcBuy(V, D, room, cash) {
   $('bRttAfter').textContent = Vafter > 0 ? fmtPct((Vafter - Dafter) / Vafter) : '—';
   if ($('bBoundBy')) $('bBoundBy').textContent = qtyMax > 0 ? boundBy : '—';
 
+  // Ghi chú ngưỡng Rtt: mua margin tỷ lệ r → Rtt hội tụ về (1−r), KHÔNG xuống thấp hơn.
+  // Đây là lý do mã r=40% mua bao nhiêu Rtt vẫn ≥ 60%, mã r=50% vẫn ≥ 50%.
+  const floor = 1 - r;
+  if ($('bRttFloorNote')) {
+    $('bRttFloorNote').textContent = r > 0
+      ? `mua càng nhiều Rtt càng tiệm cận ${(floor*100).toFixed(0)}% (=1−T.lệ), không xuống thấp hơn`
+      : 'tỷ lệ kết quả — không phải hạn mức';
+  }
+
   // ── Mục II mở rộng: KL người dùng tự chọn ──────────────────
   const qC = getNumVal('bQtyChoose');
   const qChosen = qC > 0 ? qC : qtyMax;          // 0 = dùng KL tối đa
   const valC  = qChosen * price;
   const feeC  = valC * fb;
   const loanC = valC * r;
-  const eqC   = valC * (1 - r) + feeC;           // vốn tự có cần (phần không vay + phí)
+  const eqC   = valC * (1 - r) + feeC;           // vốn tự có CẦN (phần không vay + phí)
+  const eqAvail = Math.max(0, EE) + cash;        // vốn chủ KHẢ DỤNG (dư ký quỹ + tiền mặt)
   $('bcVal').textContent    = fmtVND(valC);
   $('bcFee').textContent    = fmtVND(feeC);
   $('bcLoan').textContent   = fmtVND(loanC);
   $('bcEquity').textContent = fmtVND(eqC);
-  // Kiểm tra KL chọn có vượt hạn mức nào không: HM 1 mã hoặc HM tài khoản 81 tỷ.
+  $('bcEquityAvail').textContent = fmtVND(eqAvail);
+
+  // (1) KIỂM TRA SỨC MUA: vốn tự có cần ≤ vốn chủ khả dụng (EE + tiền)?
+  //     Đây là lý do thật khiến "mua 14.798 tỷ" là SAI khi chỉ còn 4.525 tỷ vốn chủ.
+  const bpEl    = $('bcBpChk');
+  const shortBp = eqC - eqAvail;                 // thiếu bao nhiêu vốn chủ
+  if (qChosen > 0 && shortBp > 1) {
+    bpEl.textContent = `❌ Vượt sức mua — thiếu ${fmtVND(shortBp)} đ vốn chủ/tiền`;
+    bpEl.style.color = '#c0392b';
+  } else if (qChosen > 0) {
+    bpEl.textContent = `✅ Đủ vốn chủ (dư ${fmtVND(eqAvail - eqC)} đ)`;
+    bpEl.style.color = '#2e7d32';
+  } else {
+    bpEl.textContent = '—';
+    bpEl.style.color = '';
+  }
+
+  // (2) Kiểm tra hạn mức NỢ: HM 1 mã hoặc HM tài khoản 81 tỷ.
   const overStock = lim != null && loanC > lim + 1;
   const overAcct  = (D + loanC) > getMaxLoan() + 1;
   const rcEl = $('bcRoomChk');
@@ -454,11 +481,17 @@ function recalcBuy(V, D, room, cash) {
   } else if (overAcct) {
     rcEl.textContent = `❌ Vượt HM 81 tỷ ${fmtVND((D + loanC) - getMaxLoan())} đ`;
   } else {
-    rcEl.textContent = '✅ Trong hạn mức';
+    rcEl.textContent = '✅ Trong hạn mức nợ';
   }
   rcEl.style.color = (overStock || overAcct) ? '#c0392b' : '#2e7d32';
+
   const Vc = V + valC, Dc = D + loanC;
   $('bcRtt').textContent = (qChosen > 0 && Vc > 0) ? fmtPct((Vc - Dc) / Vc) : '—';
+  if ($('bcRttFloorNote')) {
+    $('bcRttFloorNote').textContent = (qChosen > 0 && r > 0)
+      ? `ngưỡng tiệm cận ${((1 - r)*100).toFixed(0)}% (=1−T.lệ)`
+      : '';
+  }
 
   // Section III: KL mong muốn
   const qtyWant = +$('bQtyWant').value || 0;

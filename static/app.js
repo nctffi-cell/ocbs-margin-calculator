@@ -292,6 +292,9 @@ function recalcAll() {
   $('rD').textContent = fmtVND(D);
   $('rE').textContent = fmtVND(E);
   $('rRtt').textContent = fmtPct(rtt);
+  // Vốn chủ còn lại chưa dùng để vay margin = đệm vốn chủ trên mức ký quỹ tối thiểu 50%.
+  //   = E − 50%×V (≥0). Hết đệm này tức Rtt = 50%.
+  if ($('rEE')) $('rEE').textContent = fmtVND(Math.max(0, E - 0.5 * V));
 
   const loanRoom = getMaxLoan() - D;
   if ($('rLoanRoom')) {

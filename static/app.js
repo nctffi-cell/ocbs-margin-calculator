@@ -375,39 +375,34 @@ function recalcBuy(V, D, room, cash) {
   const fb    = getFb();
 
   $('bR').textContent = (r*100).toFixed(0) + '%';
-  // Hạn mức tối đa 1 mã: phần vay margin cho mã này không vượt quá min(room tổng, limit/mã).
-  const lim     = getStockLimit(sym);
-  const loanCap = (lim != null) ? Math.min(room, lim) : room;
-  // Sức mua = phần mua bằng Room (vay margin) + phần mua bằng tiền mặt (vốn tự có).
-  //   - Room/r: GT lệnh tối đa mà phần vay X·r vừa khít Room (CP danh mục làm TS đảm bảo).
-  //   - cash/(1−r): GT lệnh thêm mà phần vốn tự có X·(1−r) vừa khít tiền mặt.
-  // Hai nguồn cộng hưởng (không lấy min, không double-count cash).
-  const bpRoom  = r > 0 ? loanCap / r : 0;
-  const bpCash  = r < 1 ? cash / (1 - r) : cash;
-  const bpTotal = bpRoom + bpCash;                      // GT lệnh tối đa theo Room + Cash
 
-  // Ràng buộc Rtt = 50% (IM): GT lệnh X sao cho Rtt sau = 0.5. Mua margin r kéo Rtt
-  //   hội tụ về (1−r); chỉ chạm 50% nếu 50% nằm giữa Rtt hiện tại và (1−r).
-  //   X = (0.5·V − E)/(1 − r − 0.5). Nếu vô nghiệm/không khả thi → coi như +∞ (Room chặn).
-  const E = V - D;
-  const tIM = 0.5;
-  const denomIM = 1 - r - tIM;
-  let bpRtt = Infinity;
-  if (Math.abs(denomIM) > 1e-12) {
-    const x = (tIM * V - E) / denomIM;
-    if (x > 0) bpRtt = x;                                // nghiệm dương mới có ý nghĩa chặn
-  }
+  // ── KL tối đa = min của các HẠN MỨC DƯ NỢ, quy ra GT lệnh ──────────────
+  // Mua bằng vay margin: phần vay = GT·r. CP mua về + vốn chủ sẵn có làm TS đảm bảo
+  // cho phần (1−r) → KHÔNG bắt buộc tiền mặt. Tiền mặt (nếu có) tăng thêm sức mua.
+  //   (1) HM 1 mã (Phụ lục 1): dư nợ mã này ≤ limit_mã  → GT ≤ limit_mã / r
+  //   (2) HM tài khoản: tổng dư nợ sau mua ≤ 81 tỷ → vay mới ≤ 81tỷ − D → GT ≤ (81tỷ−D)/r
+  //   (3) Tiền mặt: phần vốn tự có (1−r) có thể trả thêm bằng cash → GT thêm cash/(1−r)
+  const lim       = getStockLimit(sym);                 // HM 1 mã (null nếu không có)
+  const acctRoom  = Math.max(0, getMaxLoan() - D);      // hạn mức nợ còn lại toàn TK
+  const loanCap   = (lim != null) ? Math.min(acctRoom, lim) : acctRoom;  // dư nợ mới tối đa cho mã này
+  const bpStock   = (lim != null && r > 0) ? lim / r : Infinity;         // GT chặn bởi HM 1 mã
+  const bpAcct    = r > 0 ? acctRoom / r : Infinity;                     // GT chặn bởi HM 81 tỷ
+  const bpLoan    = r > 0 ? loanCap / r : 0;            // GT vay tối đa (đã min 2 hạn mức)
+  const bpCash    = r < 1 ? cash / (1 - r) : 0;         // GT thêm nhờ tiền mặt
+  const bpTotal   = bpLoan + bpCash;                    // GT lệnh tối đa
 
-  // KL tối đa = min(ràng buộc Room+Cash, ràng buộc Rtt=50%). Lấy GT nhỏ hơn rồi quy ra KL.
-  const bpEffective = Math.min(bpTotal, bpRtt);
-  const qtyMax  = price > 0 ? Math.floor(bpEffective / price / 100) * 100 : 0;
-  const fee     = qtyMax * price * fb;
-  const loan    = qtyMax * price * r;
-  // Yếu tố đang chặn KL max (để hiển thị cho user hiểu vì sao Rtt sau chưa = 50%)
-  const boundBy = (bpRtt < bpTotal - 1) ? 'Rtt=50%' : 'Room';
-  // Cảnh báo nếu limit là ràng buộc chặt hơn room (tức limit thực sự cắt giảm sức mua)
-  showLimitWarn('bLimitRow', 'bLimitWarn', lim != null && lim < room, lim, room);
-  $('bBpRoom').textContent  = fmtVND(bpRoom);
+  const qtyMax = price > 0 ? Math.floor(bpTotal / price / 100) * 100 : 0;
+  const fee    = qtyMax * price * fb;
+  const loan   = qtyMax * price * r;
+
+  // Yếu tố đang chặn: hạn mức nào nhỏ hơn (so theo GT lệnh, bỏ phần cash chung cho cả 2).
+  let boundBy = 'HM tài khoản (81 tỷ)';
+  if (bpStock < bpAcct - 1) boundBy = 'HM 1 mã (Phụ lục 1)';
+  if (!isFinite(bpStock) && !isFinite(bpAcct)) boundBy = '—';
+
+  // Cảnh báo khi HM 1 mã là ràng buộc chặt hơn HM tài khoản
+  showLimitWarn('bLimitRow', 'bLimitWarn', lim != null && lim < acctRoom, lim, acctRoom);
+  $('bBpRoom').textContent  = fmtVND(bpLoan);
   $('bBpCash').textContent  = fmtVND(bpCash);
   $('bBpTotal').textContent = fmtVND(bpTotal);
   $('bQtyMax').textContent  = fmtNum(qtyMax);
@@ -417,22 +412,6 @@ function recalcBuy(V, D, room, cash) {
   const Dafter = D + loan;
   $('bRttAfter').textContent = Vafter > 0 ? fmtPct((Vafter - Dafter) / Vafter) : '—';
   if ($('bBoundBy')) $('bBoundBy').textContent = qtyMax > 0 ? boundBy : '—';
-
-  // Dòng giải thích "KL để Rtt về 50%": cho biết ràng buộc Rtt có khả thi không.
-  //   Mua margin r → Rtt hội tụ về (1−r). Chỉ chạm 50% nếu (1−r) < 50% < Rtt hiện tại.
-  const rttNow = V > 0 ? E / V : 0;
-  const converge = 1 - r;                // ngưỡng Rtt hội tụ khi mua vô hạn
-  if (rttNow <= tIM + 1e-9) {
-    $('bQtyByRtt').textContent = 'Rtt hiện đã ≤ 50% — không cần mua';
-  } else if (tIM <= converge + 1e-9) {
-    // 50% ≤ (1−r): mua margin chỉ tiệm cận (1−r), KHÔNG kéo Rtt xuống 50% được
-    $('bQtyByRtt').textContent = `Mua margin r=${(r*100)|0}% chỉ đưa Rtt → ${(converge*100)|0}% (không xuống 50%)`;
-  } else if (bpRtt !== Infinity) {
-    // khả thi: 50% nằm giữa (1−r) và Rtt hiện tại
-    $('bQtyByRtt').textContent = price > 0 ? fmtNum(Math.floor(bpRtt / price / 100) * 100) : '—';
-  } else {
-    $('bQtyByRtt').textContent = '—';
-  }
 
   // ── Mục II mở rộng: KL người dùng tự chọn ──────────────────
   const qC = getNumVal('bQtyChoose');
@@ -445,12 +424,20 @@ function recalcBuy(V, D, room, cash) {
   $('bcFee').textContent    = fmtVND(feeC);
   $('bcLoan').textContent   = fmtVND(loanC);
   $('bcEquity').textContent = fmtVND(eqC);
-  const overRoom = loanC > room + 1;
+  // Kiểm tra KL chọn có vượt hạn mức nào không: HM 1 mã hoặc HM tài khoản 81 tỷ.
+  const overStock = lim != null && loanC > lim + 1;
+  const overAcct  = (D + loanC) > getMaxLoan() + 1;
   const rcEl = $('bcRoomChk');
-  rcEl.textContent = overRoom
-    ? `❌ Vượt Room ${fmtVND(loanC - room)} đ`
-    : '✅ Trong Room';
-  rcEl.style.color = overRoom ? '#c0392b' : '#2e7d32';
+  if (overStock && overAcct) {
+    rcEl.textContent = `❌ Vượt cả HM 1 mã & HM 81 tỷ`;
+  } else if (overStock) {
+    rcEl.textContent = `❌ Vượt HM 1 mã ${fmtVND(loanC - lim)} đ`;
+  } else if (overAcct) {
+    rcEl.textContent = `❌ Vượt HM 81 tỷ ${fmtVND((D + loanC) - getMaxLoan())} đ`;
+  } else {
+    rcEl.textContent = '✅ Trong hạn mức';
+  }
+  rcEl.style.color = (overStock || overAcct) ? '#c0392b' : '#2e7d32';
   const Vc = V + valC, Dc = D + loanC;
   $('bcRtt').textContent = (qChosen > 0 && Vc > 0) ? fmtPct((Vc - Dc) / Vc) : '—';
 
@@ -463,7 +450,11 @@ function recalcBuy(V, D, room, cash) {
   $('bValWant').textContent  = fmtVND(valWant);
   $('bEqWant').textContent   = fmtVND(eqWant);
   $('bLoanWant').textContent = fmtVND(loanWant);
-  $('bRoomCheck').textContent = loanWant <= room ? '✅ Đủ Room' : '❌ Không đủ – cần tăng HM';
+  const wantOverStock = lim != null && loanWant > lim + 1;
+  const wantOverAcct  = (D + loanWant) > getMaxLoan() + 1;
+  $('bRoomCheck').textContent = (!wantOverStock && !wantOverAcct)
+    ? '✅ Trong hạn mức'
+    : (wantOverStock ? '❌ Vượt HM 1 mã' : '❌ Vượt HM 81 tỷ');
   $('bDeposit').textContent  = fmtVND(deposit);
 
   // Section IV: ngưỡng giá (giả định chỉ có 1 mã này)

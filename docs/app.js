@@ -349,8 +349,8 @@ function recalcAll() {
 
   // Tab 3 propagate
   $('bV').textContent = fmtVND(V); $('bD').textContent = fmtVND(D);
-  $('bRtt').textContent = fmtPct(rtt); $('bDmax').textContent = fmtVND(totDmax);
-  $('bRoom').textContent = fmtVND(room); $('bM').textContent = fmtVND(cash);
+  $('bRtt').textContent = fmtPct(rtt); $('bDmax').textContent = fmtVND(E);
+  $('bRoom').textContent = fmtVND(getMaxLoan() - D); $('bM').textContent = fmtVND(cash);
 
   recalcBuy(V, D, room, cash);
   recalcDeals();

@@ -17,6 +17,7 @@
   <div class="tab" data-tab="viphm">⚠️ Xử lý vi phạm</div>
   <div class="tab" data-tab="sucmua">💰 Sức mua & Mua CP</div>
   <div class="tab" data-tab="deals">🔁 4 Deals</div>
+  <div class="tab" data-tab="muonhang">📦 Mượn hàng</div>
   <div class="tab" data-tab="caps">⚙️ Giá chặn</div>
 </nav>
 
@@ -246,7 +247,59 @@
     </div>
   </section>
 
-  <!-- ========================= TAB 5: Giá chặn ========================= -->
+  <!-- ========================= TAB 5: Mượn hàng ========================= -->
+  <section class="panel" data-panel="muonhang">
+    <div class="card">
+      <div class="card-header">I. THÔNG TIN HÀNG MƯỢN</div>
+      <div class="row"><label>Mã cổ phiếu (hàng mượn)</label><input id="mSym" type="text" value="MWG" placeholder="VD: MWG"><span class="note" id="mSymNote">Tự tra giá tham chiếu</span></div>
+      <div class="row"><label>Số lượng mượn (CP)</label><input id="mQty" type="text" inputmode="numeric" data-num value="10000"><span class="note">Khối lượng cổ phiếu</span></div>
+      <div class="row"><label>Giá mượn (đ)</label><input id="mPrice" type="text" inputmode="numeric" data-num value="83800"><span class="note" id="mPriceNote"></span></div>
+      <div class="row"><label><b>Giá trị mượn</b></label><div class="calc total" id="mValue">0</div><span class="note">= Giá mượn × Khối lượng</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">II. NGÀY MƯỢN – NGÀY TRẢ</div>
+      <div class="row"><label>Ngày mượn</label><input id="mDateBorrow" type="date"><span class="note">Ngày bắt đầu mượn</span></div>
+      <div class="row"><label>Ngày trả (T+2, đã trừ lễ/T7-CN)</label><input id="mDateReturn" type="date"><span class="note" id="mDateReturnNote">Auto = mượn + 2 phiên + ngày nghỉ — có thể sửa</span></div>
+      <div class="row"><label><b>Số ngày mượn</b></label><div class="calc" id="mDays">0</div><span class="note">= Ngày trả − Ngày mượn (ngày lịch)</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">III. THAM SỐ PHÍ (có thể chỉnh)</div>
+      <div class="row"><label>Phí giao dịch mua/bán</label><input id="mFee" type="number" value="0.15" step="0.01" min="0"><span class="note">% — mặc định 0.15% (áp cho cả mua & bán)</span></div>
+      <div class="row"><label>Thuế bán</label><input id="mTax" type="number" value="0.1" step="0.01" min="0"><span class="note">% — mặc định 0.1%</span></div>
+      <div class="row"><label>% Phí mượn hàng</label><input id="mFeeBorrow" type="number" value="0" step="0.1" min="0"><span class="note">% trên giá trị mượn — mặc định 0%</span></div>
+      <div class="row"><label>% Phí ứng (lãi/năm)</label><input id="mFeeAdvance" type="number" value="13" step="0.5" min="0"><span class="note">%/năm — mặc định 13%, tính theo số ngày/360</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">IV. TỔNG FLOW PHÍ (% trên giá trị mượn)</div>
+      <div class="row"><label>Bán = Phí + Thuế</label><div class="calc" id="mPctSell">0%</div><span class="note">= Phí GD + Thuế bán</span></div>
+      <div class="row"><label>Ứng (theo kỳ mượn)</label><div class="calc" id="mPctAdvance">0%</div><span class="note">= %ứng × số ngày / 360</span></div>
+      <div class="row"><label>Mua = Phí GD</label><div class="calc" id="mPctBuy">0%</div><span class="note">= Phí GD mua</span></div>
+      <div class="row"><label>Mượn hàng</label><div class="calc" id="mPctBorrow">0%</div><span class="note">= % phí mượn hàng</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">V. KẾT QUẢ</div>
+      <div class="row"><label>Phí bán + thuế</label><div class="calc" id="mFeeSell">0</div><span class="note">GT × (Phí + Thuế)</span></div>
+      <div class="row"><label>Phí ứng</label><div class="calc" id="mFeeAdv">0</div><span class="note">GT × %ứng × ngày / 360</span></div>
+      <div class="row"><label>Phí mua</label><div class="calc" id="mFeeBuy">0</div><span class="note">GT × Phí GD</span></div>
+      <div class="row"><label>Phí mượn hàng</label><div class="calc" id="mFeeBrw">0</div><span class="note">GT × % phí mượn</span></div>
+      <div class="row"><label><b>TỔNG PHÍ</b></label><div class="calc star" id="mTotalFee">0</div><span class="note">Cộng toàn bộ chi phí</span></div>
+      <div class="row"><label><b>GIÁ TRẢ HÀNG (đ/CP)</b></label><div class="calc star" id="mReturnPrice">0</div><span class="note">= (Giá trị mượn − Tổng phí) / Khối lượng</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">📌 GIẢI THÍCH CÔNG THỨC</div>
+      <div class="hint">• Giá trị mượn = Giá mượn × Khối lượng</div>
+      <div class="hint">• Tổng phí = GT×(Bán+Mua)/100 + GT×Ứng×Ngày/360/100 + GT×Mượn/100</div>
+      <div class="hint">• Giá trả hàng = (Giá trị mượn − Tổng phí) / Khối lượng</div>
+      <div class="hint">• Ngày trả = Ngày mượn + 2 phiên giao dịch, nếu CP về vào T7/CN/lễ thì dời sang phiên kế tiếp</div>
+    </div>
+  </section>
+
+  <!-- ========================= TAB 6: Giá chặn ========================= -->
   <section class="panel" data-panel="caps">
     <div class="card">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -295,6 +348,6 @@
 
 </div>
 
-<script src="app.js?v=20260529-limit"></script>
+<script src="app.js?v=20260529-muonhang"></script>
 </body>
 </html>

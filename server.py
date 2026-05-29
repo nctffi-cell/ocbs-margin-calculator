@@ -31,7 +31,8 @@ def api_stocks():
     if not os.path.exists(STOCKS_JSON):
         return jsonify({"updated": None, "count": 0, "stocks": {}})
     mtime = os.path.getmtime(STOCKS_JSON)
-    updated = datetime.fromtimestamp(mtime).strftime("Áp dụng từ %d/%m/%Y")
+    # Tránh strftime với ký tự có dấu (lỗi locale encode trên Windows): tự ghép chuỗi
+    updated = "Áp dụng từ " + datetime.fromtimestamp(mtime).strftime("%d/%m/%Y")
     with open(STOCKS_JSON, "r", encoding="utf-8") as f:
         data = json.load(f)
     data["updated"] = updated

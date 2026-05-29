@@ -73,6 +73,7 @@ $$('.tab').forEach(t => t.onclick = () => {
   t.classList.add('active');
   document.querySelector(`.panel[data-panel="${t.dataset.tab}"]`).classList.add('active');
   if (t.dataset.tab === 'caps') renderCaps();
+  if (t.dataset.tab === 'muonhang') recalcMuon();
 });
 
 // ── Load master + caps ─────────────────────────────────────
@@ -545,6 +546,119 @@ function recalcDeals() {
     : '—';
 }
 
+// ╔════════════════ TAB 5: Mượn hàng ═════════════════════════╗
+// Ngày nghỉ lễ VN (CK đóng cửa) — định dạng 'YYYY-MM-DD'.
+// 2026: Tết DL 1/1; Tết Âm 17–21/2 (mùng 1 = 17/2); Giỗ tổ 26/4(CN)→nghỉ bù 27/4;
+//        30/4, 1/5; Quốc khánh 2/9 + nghỉ 1/9. (Có thể cập nhật khi nhà nước công bố.)
+const VN_HOLIDAYS = new Set([
+  '2026-01-01',
+  '2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20',
+  '2026-04-27',
+  '2026-04-30','2026-05-01',
+  '2026-09-01','2026-09-02',
+]);
+// true nếu ngày là phiên nghỉ (T7, CN, hoặc lễ)
+function isHoliday(d) {
+  const wd = d.getDay();              // 0 = CN, 6 = T7
+  if (wd === 0 || wd === 6) return true;
+  return VN_HOLIDAYS.has(toISODate(d));
+}
+function toISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function parseISODate(s) {
+  if (!s) return null;
+  const [y, m, d] = s.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+// Ngày trả = ngày mượn + 2 phiên giao dịch. Đếm 2 phiên giao dịch (bỏ qua T7/CN/lễ),
+// nếu kết quả rơi vào ngày nghỉ thì dời tiếp sang phiên kế. Trả về Date.
+function computeReturnDate(borrow) {
+  if (!borrow) return null;
+  let d = new Date(borrow.getTime());
+  let sessions = 0;
+  // bước qua từng ngày, mỗi phiên giao dịch hợp lệ tính 1, cần đủ 2 phiên (T+2)
+  while (sessions < 2) {
+    d.setDate(d.getDate() + 1);
+    if (!isHoliday(d)) sessions++;
+  }
+  return d;
+}
+// Số ngày lịch giữa 2 mốc
+function daysBetween(a, b) {
+  if (!a || !b) return 0;
+  const ms = b.getTime() - a.getTime();
+  return Math.round(ms / 86400000);
+}
+
+let mReturnAutoFilled = true;  // true khi ngày trả do app tự điền (chưa bị user sửa tay)
+
+async function onMuonSymBlur() {
+  const sym = $('mSym').value.toUpperCase().trim();
+  if (!sym) return;
+  const p = await fetchPrice(sym);
+  if (p) { setNumVal($('mPrice'), p.price); $('mPriceNote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
+  recalcMuon();
+}
+
+// Khi đổi ngày mượn → tự tính lại ngày trả (nếu user chưa override)
+function onBorrowDateChange() {
+  const borrow = parseISODate($('mDateBorrow').value);
+  if (borrow && mReturnAutoFilled) {
+    const ret = computeReturnDate(borrow);
+    if (ret) $('mDateReturn').value = toISODate(ret);
+  }
+  recalcMuon();
+}
+
+function recalcMuon() {
+  const qty   = getNumVal('mQty');
+  const price = getNumVal('mPrice');
+  const value = qty * price;                 // Giá trị mượn
+  $('mValue').textContent = fmtVND(value);
+
+  const borrow = parseISODate($('mDateBorrow').value);
+  const ret    = parseISODate($('mDateReturn').value);
+  const days   = daysBetween(borrow, ret);
+  $('mDays').textContent = days > 0 ? `${days} ngày` : '—';
+
+  // Tham số % (nhập theo %, chia 100 khi nhân giá trị)
+  const fee    = (+$('mFee').value        || 0);   // phí GD mua/bán %
+  const tax    = (+$('mTax').value        || 0);   // thuế bán %
+  const brw    = (+$('mFeeBorrow').value  || 0);   // phí mượn hàng %
+  const adv    = (+$('mFeeAdvance').value || 0);   // phí ứng %/năm
+
+  // Tổng flow phí (%)
+  const pctSell    = fee + tax;                    // bán = phí + thuế
+  const pctBuy     = fee;                          // mua = phí
+  const pctAdvance = adv * days / 360;             // ứng theo kỳ
+  const pctBorrow  = brw;                          // phí mượn hàng
+  $('mPctSell').textContent    = pctSell.toFixed(3) + '%';
+  $('mPctBuy').textContent     = pctBuy.toFixed(3) + '%';
+  $('mPctAdvance').textContent = pctAdvance.toFixed(4) + '%';
+  $('mPctBorrow').textContent  = pctBorrow.toFixed(3) + '%';
+
+  // Các khoản phí (đồng)
+  const feeSell = value * pctSell    / 100;
+  const feeBuy  = value * pctBuy     / 100;
+  const feeAdv  = value * pctAdvance / 100;
+  const feeBrw  = value * pctBorrow  / 100;
+  const totalFee = feeSell + feeBuy + feeAdv + feeBrw;
+  $('mFeeSell').textContent = fmtVND(feeSell);
+  $('mFeeBuy').textContent  = fmtVND(feeBuy);
+  $('mFeeAdv').textContent  = fmtVND(feeAdv);
+  $('mFeeBrw').textContent  = fmtVND(feeBrw);
+  $('mTotalFee').textContent = fmtVND(totalFee);
+
+  // Giá trả hàng = (giá trị mượn − tổng phí) / khối lượng
+  const returnPrice = qty > 0 ? (value - totalFee) / qty : 0;
+  $('mReturnPrice').textContent = qty > 0 ? fmtVND(returnPrice) : '—';
+}
+
 // ── Tab 5: Caps editor ─────────────────────────────────────
 // ── Sort state for caps table ─────────────────────────────────
 let capSort = { field: 'sym', asc: true };
@@ -662,6 +776,13 @@ $('capExch').oninput   = renderCaps;
 ['d1Sym','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
 $('bSym').addEventListener('change', onBuySymBlur);
 
+// ── Tab 5: Mượn hàng wiring ────────────────────────────────
+['mQty','mPrice','mFee','mTax','mFeeBorrow','mFeeAdvance']
+  .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcMuon); });
+$('mSym').addEventListener('change', onMuonSymBlur);
+$('mDateBorrow').addEventListener('change', onBorrowDateChange);
+$('mDateReturn').addEventListener('change', () => { mReturnAutoFilled = false; recalcMuon(); });
+
 $('btnRefreshAll').onclick = async () => {
   for (let i = 0; i < 10; i++) {
     const sym = STATE.holdings[i].sym; if (!sym) continue;
@@ -705,12 +826,35 @@ async function prefetchDefaultPrices() {
   recalcAll();
 }
 
+// Khởi tạo ngày mượn = hôm nay, ngày trả = T+2 (auto skip nghỉ/lễ)
+function initMuonDates() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  $('mDateBorrow').value = toISODate(today);
+  const ret = computeReturnDate(today);
+  if (ret) $('mDateReturn').value = toISODate(ret);
+  mReturnAutoFilled = true;
+}
+
+// Prefetch giá tham chiếu cho mã mượn mặc định
+async function prefetchMuonPrice() {
+  const sym = $('mSym')?.value?.toUpperCase().trim();
+  if (!sym) return;
+  const p = await fetchPrice(sym);
+  if (!p) return;
+  setNumVal($('mPrice'), p.price);
+  if ($('mPriceNote')) $('mPriceNote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`;
+}
+
 // ── Init ───────────────────────────────────────────────────
 (async () => {
   await loadMaster();
   await loadCaps();
   await loadPrices();
   initHoldingsTable();
+  initMuonDates();
   recalcAll();
-  prefetchDefaultPrices();
+  await prefetchDefaultPrices();
+  await prefetchMuonPrice();
+  recalcMuon();
 })();

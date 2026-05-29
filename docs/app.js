@@ -273,9 +273,9 @@ function recalcAll() {
   if ($('pFsDisplay')) $('pFsDisplay').textContent = (getFs() * 100).toFixed(3) + '%';
 
   const { totMV, totDmax } = recalcHoldings();
-  const cash = +$('aCash').value || 0;
-  const debt = +$('aDebt').value || 0;
-  const intt = +$('aInt').value || 0;
+  const cash = getNumVal('aCash');
+  const debt = getNumVal('aDebt');
+  const intt = getNumVal('aInt');
   const D = debt + intt;
   $('aTotalDebt').textContent = fmtVND(D);
   const V = totMV + cash;

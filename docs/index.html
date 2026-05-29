@@ -38,9 +38,9 @@
 
     <div class="card">
       <div class="card-header">II. THÔNG TIN TÀI KHOẢN</div>
-      <div class="row"><label>Tiền mặt khả dụng (đ)</label><input id="aCash" type="number" value="0"><span class="note">Số dư hiện tại</span></div>
-      <div class="row"><label>Dư nợ margin (đ)</label><input id="aDebt" type="number" value="0"><span class="note">Nợ gốc</span></div>
-      <div class="row"><label>Lãi vay (đ)</label><input id="aInt" type="number" value="0"><span class="note">Lãi phát sinh</span></div>
+      <div class="row"><label>Tiền mặt khả dụng (đ)</label><input id="aCash" type="text" inputmode="numeric" data-num value="0"><span class="note">Số dư hiện tại</span></div>
+      <div class="row"><label>Dư nợ margin (đ)</label><input id="aDebt" type="text" inputmode="numeric" data-num value="0"><span class="note">Nợ gốc</span></div>
+      <div class="row"><label>Lãi vay (đ)</label><input id="aInt" type="text" inputmode="numeric" data-num value="0"><span class="note">Lãi phát sinh</span></div>
       <div class="row"><label><b>Tổng nợ (D)</b></label><div class="calc total" id="aTotalDebt">0</div><span class="note">= Nợ + Lãi</span></div>
     </div>
 
@@ -348,6 +348,6 @@
 
 </div>
 
-<script src="app.js?v=20260529-muonhang"></script>
+<script src="app.js?v=20260529-fmtaccount"></script>
 </body>
 </html>

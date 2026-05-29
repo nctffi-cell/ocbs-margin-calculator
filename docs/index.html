@@ -205,11 +205,21 @@
       <div class="row"><label>Sức mua từ Room</label><div class="calc" id="bBpRoom">0</div><span class="note">= Room / T.lệ Margin</span></div>
       <div class="row"><label>Sức mua từ Cash</label><div class="calc" id="bBpCash">0</div><span class="note">= M / (1−T.lệ)</span></div>
       <div class="row"><label><b>Sức mua TỔNG (GT lệnh)</b></label><div class="calc star" id="bBpTotal">0</div><span></span></div>
-      <div class="row"><label>KL tối đa có thể đặt</label><div class="calc" id="bQtyMax">0</div><span class="note">làm tròn xuống 100</span></div>
-      <div class="row"><label>Phí mua ước tính</label><div class="calc" id="bFee">0</div><span></span></div>
-      <div class="row"><label>Tiền vay dự kiến</label><div class="calc" id="bLoan">0</div><span></span></div>
+      <div class="row"><label>KL tối đa (chặn bởi Room)</label><div class="calc" id="bQtyMax">0</div><span class="note">làm tròn xuống 100 — hết hạn mức vay</span></div>
+      <div class="row"><label>KL nếu để Rtt về 50% (IM)</label><div class="calc" id="bQtyByRtt">0</div><span class="note">Mua đến khi Rtt=50% (có thể vượt Room)</span></div>
+      <div class="row"><label>Phí mua ước tính</label><div class="calc" id="bFee">0</div><span class="note">theo KL tối đa (Room)</span></div>
+      <div class="row"><label>Tiền vay dự kiến</label><div class="calc" id="bLoan">0</div><span class="note">theo KL tối đa (Room)</span></div>
       <div class="row" id="bLimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="bLimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Đã chạm trần HM 1 mã</span></div>
-      <div class="row"><label><b>Rtt sau khi mua</b></label><div class="calc star" id="bRttAfter">—</div><span></span></div>
+      <div class="row"><label><b>Rtt sau khi mua (KL max)</b></label><div class="calc star" id="bRttAfter">—</div><span class="note">theo KL tối đa (Room)</span></div>
+
+      <div class="section-sub" style="margin-top:14px">↓ NHẬP KL TÙY CHỌN ĐỂ MÔ PHỎNG</div>
+      <div class="row"><label>KL muốn mua (tùy chọn)</label><input id="bQtyChoose" type="text" inputmode="numeric" data-num value="0"><span class="note">Để 0 = dùng KL tối đa ở trên</span></div>
+      <div class="row"><label>GT lệnh (KL đã chọn)</label><div class="calc" id="bcVal">0</div><span class="note">= KL × giá đặt</span></div>
+      <div class="row"><label>Phí mua</label><div class="calc" id="bcFee">0</div><span></span></div>
+      <div class="row"><label>Tiền vay</label><div class="calc" id="bcLoan">0</div><span class="note">= GT × T.lệ margin</span></div>
+      <div class="row"><label>Vốn tự có cần</label><div class="calc" id="bcEquity">0</div><span class="note">= GT × (1−T.lệ) + phí</span></div>
+      <div class="row"><label>Vượt Room?</label><div class="calc" id="bcRoomChk">—</div><span class="note">Tiền vay so Room còn lại</span></div>
+      <div class="row"><label><b>Rtt sau khi mua (KL chọn)</b></label><div class="calc star" id="bcRtt">—</div><span></span></div>
     </div>
 
     <div class="card">
@@ -398,6 +408,6 @@
 
 </div>
 
-<script src="app.js?v=20260529-buypower"></script>
+<script src="app.js?v=20260529-buyqty"></script>
 </body>
 </html>

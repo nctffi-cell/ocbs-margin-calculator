@@ -400,6 +400,50 @@ function recalcBuy(V, D, room, cash) {
   const Dafter = D + loan;
   $('bRttAfter').textContent = Vafter > 0 ? fmtPct((Vafter - Dafter) / Vafter) : '—';
 
+  // KL nếu để Rtt về 50% (IM). Mua margin r → Rtt hội tụ về (1−r), không xuống thấp hơn.
+  //   Sau mua GT lệnh X: V'=V+X, D'=D+X·r, E'=E+X·(1−r). Rtt'=(E+X(1−r))/(V+X).
+  //   Đặt Rtt'=t → X=(t·V−E)/(1−r−t). Khả thi khi t>(1−r) (mẫu>0) và X>0.
+  // Mua margin GT lệnh X mã r: Rtt' = (E+X(1−r))/(V+X), khi X→∞ hội tụ về (1−r).
+  //   Đạt target t khi t nằm GIỮA rttNow và (1−r): X = (t·V−E)/(1−r−t), với X>0.
+  //   • Nếu rttNow ≤ t: đã đạt, không cần mua.
+  //   • Nếu t ≤ (1−r) < rttNow: mua chỉ tiệm cận (1−r), không chạm t → không khả thi.
+  const E = V - D;
+  const rttNow = V > 0 ? E / V : 0;
+  const tIM = 0.5;                       // mục tiêu Rtt 50%
+  const converge = 1 - r;                // ngưỡng Rtt hội tụ khi mua vô hạn
+  const denom = converge - tIM;          // = 1 − r − tIM
+  if (rttNow <= tIM + 1e-9) {
+    $('bQtyByRtt').textContent = 'Rtt hiện đã ≤ 50% — không cần mua';
+  } else if (tIM <= converge + 1e-9) {
+    // target ≤ ngưỡng hội tụ: mua margin không thể kéo Rtt xuống tới 50%
+    $('bQtyByRtt').textContent = `Mua margin chỉ đưa Rtt → ${(converge*100)|0}% (không xuống 50% được)`;
+  } else if (price > 0 && Math.abs(denom) > 1e-12) {
+    const Xrtt = (tIM * V - E) / denom;   // denom<0 và (tV−E)<0 → X>0
+    $('bQtyByRtt').textContent = Xrtt > 0 ? fmtNum(Math.floor(Xrtt / price / 100) * 100) : 'Rtt hiện đã ≤ 50% — không cần mua';
+  } else {
+    $('bQtyByRtt').textContent = '—';
+  }
+
+  // ── Mục II mở rộng: KL người dùng tự chọn ──────────────────
+  const qC = getNumVal('bQtyChoose');
+  const qChosen = qC > 0 ? qC : qtyMax;          // 0 = dùng KL tối đa
+  const valC  = qChosen * price;
+  const feeC  = valC * fb;
+  const loanC = valC * r;
+  const eqC   = valC * (1 - r) + feeC;           // vốn tự có cần (phần không vay + phí)
+  $('bcVal').textContent    = fmtVND(valC);
+  $('bcFee').textContent    = fmtVND(feeC);
+  $('bcLoan').textContent   = fmtVND(loanC);
+  $('bcEquity').textContent = fmtVND(eqC);
+  const overRoom = loanC > room + 1;
+  const rcEl = $('bcRoomChk');
+  rcEl.textContent = overRoom
+    ? `❌ Vượt Room ${fmtVND(loanC - room)} đ`
+    : '✅ Trong Room';
+  rcEl.style.color = overRoom ? '#c0392b' : '#2e7d32';
+  const Vc = V + valC, Dc = D + loanC;
+  $('bcRtt').textContent = (qChosen > 0 && Vc > 0) ? fmtPct((Vc - Dc) / Vc) : '—';
+
   // Section III: KL mong muốn
   const qtyWant = +$('bQtyWant').value || 0;
   const valWant = qtyWant * price * (1 + fb);
@@ -960,7 +1004,7 @@ $('capFilter').oninput = renderCaps;
 $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
-['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant',
+['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant','bQtyChoose',
  'dR','dRtt','d1N','d1P','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 

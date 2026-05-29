@@ -377,33 +377,35 @@ function recalcBuy(V, D, room, cash) {
 
   $('bR').textContent = (r*100).toFixed(0) + '%';
 
-  // ── KL tối đa = min của các HẠN MỨC DƯ NỢ, quy ra GT lệnh ──────────────
-  // Mua bằng vay margin: phần vay = GT·r. CP mua về + vốn chủ sẵn có làm TS đảm bảo
-  // cho phần (1−r) → KHÔNG bắt buộc tiền mặt. Tiền mặt (nếu có) tăng thêm sức mua.
-  // MÔ HÌNH MARGIN CHUẨN: mua GT lệnh X = vốn tự có (1−r)·X (từ TIỀN MẶT) + vay r·X.
-  //   GT lệnh X bị kẹp bởi 4 ràng buộc, lấy min:
-  //   (1) Tiền mặt: vốn tự có (1−r)·X ≤ cash       → X ≤ cash/(1−r)
-  //   (2) HM 1 mã (Phụ lục 1): vay r·X ≤ limit_mã  → X ≤ limit_mã/r
-  //   (3) HM tài khoản: vay r·X ≤ 81tỷ−D           → X ≤ (81tỷ−D)/r
-  //   (4) Rtt sau ≥ 50%
+  // ── CÔNG THỨC CHUẨN OCBS (File tính sức mua - OCBS 1) ──────────────────
+  //   Sức mua KHÔNG dựa tiền mặt mà dựa DƯ KÝ QUỸ (EE) — vốn chủ dư trên mức ký quỹ
+  //   tối thiểu. Còn EE > 0 thì mua được dù tiền mặt = 0.
+  //     E (vốn chủ) = V − D ;  MR (ký quỹ yêu cầu) = V × (1 − CCR)
+  //     EE = E − MR = E − V×(1−CCR)
+  //     Sức mua B = EE / (1 − CCR×T) ;  CCR = tỷ lệ cho vay margin của mã (r), T = kỳ = 1
+  //   Tiền mặt (nếu có) cộng thêm: cash/(1−CCR×T). Cuối cùng kẹp hạn mức dư nợ.
   const lim       = getStockLimit(sym);                 // HM 1 mã (null nếu không có)
   const acctRoom  = Math.max(0, getMaxLoan() - D);      // hạn mức nợ còn lại toàn TK
-  const bpCash    = r < 1 ? cash / (1 - r) : Infinity;  // (1) GT chặn bởi tiền mặt
-  const bpStock   = (lim != null && r > 0) ? lim / r : Infinity;   // (2) GT chặn bởi HM 1 mã
-  const bpAcct    = r > 0 ? acctRoom / r : Infinity;    // (3) GT chặn bởi HM 81 tỷ
+  const E         = V - D;                              // vốn chủ
+  const CCR       = r;                                  // tỷ lệ cho vay = tỷ lệ margin của mã
+  const T         = 1;
 
-  // (4) Ràng buộc Rtt ≥ 50%: sau mua GT lệnh X, Rtt' = (E + X(1−r) − phí)/(V+X) ≥ 0.5.
-  //   Bỏ phí cho gọn: X·(0.5−r) ≥ 0.5V − E. r>0.5 → X ≤ (E−0.5V)/(r−0.5). r≤0.5 → luôn thỏa.
-  const E = V - D;
-  let bpRtt = Infinity;
-  if (r > 0.5 + 1e-12) {
-    const x = (E - 0.5 * V) / (r - 0.5);
-    bpRtt = x > 0 ? x : 0;                              // Rtt hiện đã <50% thì không mua thêm được
-  }
+  const EE        = E - V * (1 - CCR);                  // dư ký quỹ
+  const denomB    = 1 - CCR * T;
+  const bpEquity  = (EE > 0 && denomB > 1e-12) ? EE / denomB : 0;   // sức mua từ dư ký quỹ
+  const bpCashAdd = (denomB > 1e-12) ? cash / denomB : 0;           // tiền mặt cộng thêm
 
-  // GT lệnh tối đa = min của cả 4 ràng buộc.
-  const bpTotal = Math.min(bpCash, bpStock, bpAcct, bpRtt);
-  const bpLoan  = Math.min(bpStock, bpAcct) * r;        // dư nợ tối đa cho phép (để hiển thị tham khảo)
+  // Sức mua trước khi kẹp hạn mức dư nợ
+  const bpBeforeLimit = bpEquity + bpCashAdd;
+
+  // Kẹp hạn mức dư nợ: phần vay = GT × CCR ≤ min(HM 1 mã, HM tài khoản 81 tỷ).
+  const loanCap = (lim != null) ? Math.min(acctRoom, lim) : acctRoom;
+  const bpByLoan = CCR > 0 ? loanCap / CCR : Infinity;
+  const bpStock  = (lim != null && CCR > 0) ? lim / CCR : Infinity;
+  const bpAcct   = CCR > 0 ? acctRoom / CCR : Infinity;
+
+  const bpTotal = Math.max(0, Math.min(bpBeforeLimit, bpByLoan));
+  const bpLoan  = bpEquity;                             // alias hiển thị "sức mua từ dư ký quỹ"
 
   const qtyMax = price > 0 ? Math.floor(bpTotal / price / 100) * 100 : 0;
   const fee    = qtyMax * price * fb;
@@ -411,17 +413,16 @@ function recalcBuy(V, D, room, cash) {
 
   // Yếu tố đang chặn KL = ràng buộc có GT lệnh nhỏ nhất.
   const constraints = [
-    { v: bpCash,  name: 'Tiền mặt (vốn tự có)' },
-    { v: bpStock, name: 'HM 1 mã (Phụ lục 1)' },
-    { v: bpAcct,  name: 'HM tài khoản (81 tỷ)' },
-    { v: bpRtt,   name: 'Rtt ≥ 50%' },
+    { v: bpBeforeLimit, name: 'Dư ký quỹ (EE) + tiền mặt' },
+    { v: bpStock,       name: 'HM 1 mã (Phụ lục 1)' },
+    { v: bpAcct,        name: 'HM tài khoản (81 tỷ)' },
   ].sort((a, b) => a.v - b.v);
   const boundBy = isFinite(constraints[0].v) ? constraints[0].name : '—';
 
   // Cảnh báo khi HM 1 mã là ràng buộc chặt hơn HM tài khoản
   showLimitWarn('bLimitRow', 'bLimitWarn', lim != null && lim < acctRoom, lim, acctRoom);
   $('bBpRoom').textContent  = isFinite(bpLoan) ? fmtVND(bpLoan) : '—';
-  $('bBpCash').textContent  = isFinite(bpCash) ? fmtVND(bpCash) : '—';
+  $('bBpCash').textContent  = isFinite(bpCashAdd) ? fmtVND(bpCashAdd) : '—';
   $('bBpTotal').textContent = fmtVND(bpTotal);
   $('bQtyMax').textContent  = fmtNum(qtyMax);
   $('bFee').textContent     = fmtVND(fee);

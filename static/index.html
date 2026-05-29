@@ -201,9 +201,9 @@
       <div class="row"><label>Mã CK muốn mua</label><input id="bSym" type="text" placeholder="VD: HPG"><span class="note">Tự tra T.lệ margin</span></div>
       <div class="row"><label>Giá đặt mua (đ)</label><input id="bPrice" type="text" inputmode="numeric" data-num value="0"><span class="note" id="bPriceNote"></span></div>
       <div class="row"><label>T.lệ Margin CP này</label><div class="calc" id="bR">0%</div><span class="note">Auto từ master list</span></div>
-      <div class="row"><label>Sức mua theo tiền mặt</label><div class="calc" id="bBpCash">0</div><span class="note">= Tiền mặt M / (1−T.lệ) — vốn tự có quyết định sức mua</span></div>
-      <div class="row"><label>Dư nợ vay tối đa cho phép</label><div class="calc" id="bBpRoom">0</div><span class="note">= min(HM 1 mã, HM 81 tỷ còn lại)</span></div>
-      <div class="row"><label><b>Sức mua TỔNG (GT lệnh)</b></label><div class="calc star" id="bBpTotal">0</div><span class="note">= min(tiền mặt, HM mã, HM 81 tỷ, Rtt≥50%)</span></div>
+      <div class="row"><label>Sức mua từ dư ký quỹ (EE)</label><div class="calc" id="bBpRoom">0</div><span class="note">= EE / (1−T.lệ) — EE = E − (1−T.lệ)×V</span></div>
+      <div class="row"><label>Sức mua thêm từ tiền mặt</label><div class="calc" id="bBpCash">0</div><span class="note">= M / (1−T.lệ) — cộng thêm nếu có</span></div>
+      <div class="row"><label><b>Sức mua TỔNG (GT lệnh)</b></label><div class="calc star" id="bBpTotal">0</div><span class="note">= (EE + tiền mặt)/(1−T.lệ), kẹp HM mã & HM 81 tỷ</span></div>
       <div class="row"><label><b>KL tối đa có thể đặt</b></label><div class="calc star" id="bQtyMax">0</div><span class="note">làm tròn xuống 100</span></div>
       <div class="row"><label>↳ Đang bị chặn bởi</label><div class="calc" id="bBoundBy">—</div><span class="note">Hạn mức giới hạn: HM 1 mã hay HM tài khoản 81 tỷ</span></div>
       <div class="row"><label>Phí mua ước tính</label><div class="calc" id="bFee">0</div><span class="note">theo KL tối đa</span></div>
@@ -407,6 +407,6 @@
 
 </div>
 
-<script src="app.js?v=20260529-buycash"></script>
+<script src="app.js?v=20260529-buyEE"></script>
 </body>
 </html>

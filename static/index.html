@@ -192,6 +192,7 @@
       <div class="row"><label>D (Tổng nợ)</label><div class="calc" id="bD">0</div><span></span></div>
       <div class="row"><label>Rtt hiện tại</label><div class="calc" id="bRtt">—</div><span></span></div>
       <div class="row"><label>Vốn chủ E (V − D)</label><div class="calc" id="bDmax">0</div><span class="note">Tài sản ròng hiện có</span></div>
+      <div class="row"><label>Vốn chủ còn lại (đệm Rtt 50%) = EE</label><div class="calc" id="bEE">0</div><span class="note">= E − 50%×V — dư ký quỹ, còn vay margin tiếp được</span></div>
       <div class="row"><label>Còn lại đến HM tài khoản</label><div class="calc" id="bRoom">0</div><span class="note">= 81 tỷ − D</span></div>
       <div class="row"><label>Tiền mặt hiện có (M)</label><div class="calc" id="bM">0</div><span></span></div>
     </div>
@@ -304,7 +305,7 @@
       <div class="row"><label>Dư nợ phát sinh</label><div class="calc" id="d4Debt">0</div><span class="note">= N · Pref · r'</span></div>
       <div class="row"><label>Tiền dư (chưa dùng)</label><div class="calc" id="d4Rem">0</div><span class="note">= X − tiền thực dùng</span></div>
       <div class="row" id="d4LimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="d4LimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Đã chạm trần — KL mua đã kẹp</span></div>
-      <div class="row"><label><b>Rtt sau khi mua</b></label><div class="calc star" id="d4Rtt">—</div><span class="note">= (V_sau − D_sau) / V_sau, cộng dồn danh mục Tab 1</span></div>
+      <div class="row"><label><b>Rtt sau khi mua</b></label><div class="calc star" id="d4Rtt">—</div><span class="note">= (V_sau − D_sau) / V_sau — tính riêng giao dịch này (không gồm danh mục Tab 1)</span></div>
     </div>
   </section>
 

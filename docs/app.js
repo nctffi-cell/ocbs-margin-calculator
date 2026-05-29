@@ -126,9 +126,20 @@ async function fetchPrice(sym) {
   return STATE.prices[sym] || null;
 }
 
+// Tỷ lệ cho vay margin. Mã NGOÀI danh mục ký quỹ (không có trong master) → r = 0
+// (không được vay, phải mua 100% bằng tiền/vốn tự có).
 function getR(sym) {
   const m = STATE.master[(sym||'').toUpperCase()];
-  return m ? m.r : 0.5;
+  return m ? m.r : 0;
+}
+// Tỷ lệ tài sản (ts) = TL tài sản SM của Excel — dùng để CHIẾT KHẤU giá trị CK khi
+// định giá tài sản tính Rtt (PV). Khác với r (tỷ lệ cho vay).
+// Mã NGOÀI danh mục ký quỹ → ts = 0 (không được tính làm tài sản đảm bảo).
+function getTs(sym) {
+  const m = STATE.master[(sym||'').toUpperCase()];
+  if (!m) return 0;
+  const t = (m.ts != null) ? m.ts : m.evalRatio;
+  return (t != null) ? t : 0;
 }
 function getCapHigh(sym) {
   const s = (sym||'').toUpperCase();
@@ -233,30 +244,33 @@ async function onHoldingBlur(e) {
     setNumVal(inputPrice, p.price);
     STATE.holdings[i].price = p.price;
   }
-  // Gợi ý T.lệ margin từ master list
+  // Gợi ý T.lệ margin từ master list. Mã NGOÀI danh mục ký quỹ → gợi ý 0% (không vay).
   const masterR = STATE.master[sym]?.r;
-  if (masterR != null) {
-    const rEl = document.querySelector(`input[data-i="${i}"][data-f="r"]`);
-    if (!rEl.dataset.manualEdit) {
-      rEl.value = masterR;
-      STATE.holdings[i].r = masterR;
-    }
+  const rEl = document.querySelector(`input[data-i="${i}"][data-f="r"]`);
+  if (rEl && !rEl.dataset.manualEdit) {
+    const suggested = (masterR != null) ? masterR : 0;   // mã lạ → 0
+    rEl.value = suggested;
+    STATE.holdings[i].r = suggested;
   }
   recalcAll();
 }
 
 function recalcHoldings() {
-  let totMV = 0, totDmax = 0, totMR = 0;
+  let totMV = 0, totPV = 0, totDmax = 0, totMR = 0, totMRpv = 0;
   for (let i = 0; i < 10; i++) {
     const h = STATE.holdings[i];
     const r = h.r ?? getR(h.sym);
+    const ts = getTs(h.sym);                       // tỷ lệ tài sản (chiết khấu định giá)
     const pEval = evalPrice(h.sym, h.price);
-    const mv = h.qty * pEval;
+    const mv = h.qty * pEval;                       // giá trị thị trường (100%)
+    const pv = mv * ts;                             // giá trị tài sản đã chiết khấu (PV — Excel)
     const lim = getStockLimit(h.sym);
     const dmaxRaw = mv * r;
     const dmax = (lim != null) ? Math.min(dmaxRaw, lim) : dmaxRaw;
     const mr = mv - dmax;
-    totMV += mv; totDmax += dmax; totMR += mr;
+    // MR theo cơ sở chiết khấu (khớp Excel V42): ký quỹ yêu cầu = pv × (1 − r) per-stock.
+    totMRpv += pv * (1 - r);
+    totMV += mv; totPV += pv; totDmax += dmax; totMR += mr;
     // Update cells
     document.querySelector(`[data-i="${i}"][data-f="evalPrice"]`).textContent = fmtVND(pEval);
     document.querySelector(`[data-i="${i}"][data-f="mv"]`).textContent = fmtVND(mv);
@@ -266,35 +280,49 @@ function recalcHoldings() {
   $('totMV').textContent = fmtVND(totMV);
   $('totDmax').textContent = fmtVND(totDmax);
   $('totMR').textContent = fmtVND(totMR);
-  return { totMV, totDmax, totMR };
+  return { totMV, totPV, totDmax, totMR, totMRpv };
 }
 
 function recalcAll() {
   // Cập nhật display phí + thuế bán
   if ($('pFsDisplay')) $('pFsDisplay').textContent = (getFs() * 100).toFixed(3) + '%';
 
-  const { totMV, totDmax } = recalcHoldings();
+  const { totMV, totPV, totDmax, totMRpv } = recalcHoldings();
   const cash = getNumVal('aCash');
   const debt = getNumVal('aDebt');
   const intt = getNumVal('aInt');
   const D = debt + intt;
   $('aTotalDebt').textContent = fmtVND(D);
-  const V = totMV + cash;
-  const E = V - D;
-  const rtt = V > 0 ? E / V : 0;
-  STATE.account = { V, D, E, rtt, cash, totMV, totDmax };
+
+  // ── MÔ HÌNH CMRp (khớp Excel "File tính sức mua - OCBS 1", ô D24) ──────────
+  //   PV  = Σ KL × giá đánh giá × ts   (giá trị tài sản đã CHIẾT KHẤU theo tỷ lệ tài sản)
+  //   Vasset (Excel EB) = PV + tiền    → đây là "Tổng tài sản V" hiển thị & cơ sở tính Rtt
+  //   AB (Excel)        = PV + tiền − D  (vốn chủ trên cơ sở chiết khấu)
+  //   CMRp (Rtt)        = (PV + tiền − D) / (PV + max(tiền − D, 0))
+  // Tiền KHÔNG bị chiết khấu; khi tiền < nợ, phần tiền bị trừ khỏi mẫu số → khớp ô D24.
+  const PV     = totPV;                       // tổng giá trị tài sản tạm tính (Excel D9)
+  const Vasset = PV + cash;                   // tổng tài sản trên cơ sở chiết khấu (Excel EB)
+  const AB     = PV + cash - D;               // vốn chủ chiết khấu (Excel AB / EE gốc)
+  const cmrpDen = PV + Math.max(cash - D, 0); // mẫu số CMRp đặc biệt
+  const rtt    = cmrpDen > 0 ? (PV + cash - D) / cmrpDen : 0;
+
+  // V (giá trị THỊ TRƯỜNG) — giữ cho các phép bán/nộp tiền (tài sản bán theo giá TT).
+  const Vmkt = totMV + cash;
+  const V = Vasset;                           // "Tổng tài sản V" hiển thị theo cơ sở chiết khấu
+  const E = AB;                               // "Vốn chủ E" = AB
+  STATE.account = { V, Vmkt, PV, D, E, AB, rtt, cash, totMV, totPV, totDmax, totMRpv };
   const room = totDmax - D;
 
   // Tab 1 outputs
-  $('rVcp').textContent = fmtVND(totMV);
+  $('rVcp').textContent = fmtVND(PV);         // Giá trị danh mục CP = PV (đã chiết khấu)
   $('rM').textContent = fmtVND(cash);
   $('rV').textContent = fmtVND(V);
   $('rD').textContent = fmtVND(D);
   $('rE').textContent = fmtVND(E);
   $('rRtt').textContent = fmtPct(rtt);
-  // Vốn chủ còn lại chưa dùng để vay margin = đệm vốn chủ trên mức ký quỹ tối thiểu 50%.
-  //   = E − 50%×V (≥0). Hết đệm này tức Rtt = 50%.
-  if ($('rEE')) $('rEE').textContent = fmtVND(Math.max(0, E - 0.5 * V));
+  // Dư ký quỹ (EE) = AB − MR, với MR = PV×MMR (mức ký quỹ tối thiểu 50% trên tài sản).
+  //   EE = AB − PV×0.5. Hết EE tức Rtt chạm 50%. (Excel D15)
+  if ($('rEE')) $('rEE').textContent = fmtVND(Math.max(0, AB - 0.5 * PV));
 
   const loanRoom = getMaxLoan() - D;
   if ($('rLoanRoom')) {
@@ -314,13 +342,26 @@ function recalcAll() {
   else if (rtt >= fs)      { stEl.textContent = `🔴 CALL MARGIN (${(fs*100)|0}% ≤ Rtt < ${(cm*100)|0}%)`; stEl.className = 'status call'; needAlert = true; alertClass = 'call'; }
   else                     { stEl.textContent = `🚨 FORCE SELL (Rtt < ${(fs*100)|0}%)`;                  stEl.className = 'status force'; needAlert = true; alertClass = 'force'; }
 
+  // Nộp tiền / bán CP để đạt Rtt mục tiêu (theo CMRp + chiết khấu ts).
+  //   Nộp C: Rtt mới = (PV+cash+C−D)/(PV+max(cash+C−D,0)). Còn vay (cash+C<D) → mẫu=PV.
+  //          C = D − PV×(1−t) − cash.
+  //   Bán S (giá thị trường): PV↓ S×tsAvg, nợ↓ S×(1−fsSell), phí mất S×fsSell.
+  //          Rtt = (PV−S·ts + 0 − (D−S(1−φ))) / (PV−S·ts)  → S = (D−PV(1−t))/(1−φ−ts+t·ts).
+  const tsAvg  = totMV > 0 ? PV / totMV : 1;     // tỷ lệ tài sản bình quân danh mục CP
+  const fsSell = getFs();                        // phí + thuế khi bán
+  const depFor = t => Math.max(0, D - PV * (1 - t) - cash);
+  const sellFor = t => {
+    const den = 1 - fsSell - tsAvg + t * tsAvg;
+    return den > 1e-9 ? Math.max(0, (D - PV * (1 - t)) / den) : 0;
+  };
+
   // Alert panel
   const panel = $('alertPanel');
   if (needAlert && V > 0 && D > 0) {
-    const c50 = Math.max(0, D / 0.5  - V);
-    const c35 = Math.max(0, D / 0.65 - V);
-    const s50 = Math.max(0, V - E / 0.5);
-    const s35 = Math.max(0, V - E / 0.35);
+    const c50 = depFor(0.5);
+    const c35 = depFor(cm);                      // về ngưỡng Call hiện hành (mặc định 35%)
+    const s50 = sellFor(0.5);
+    const s35 = sellFor(cm);
     $('alertTitle').textContent = alertClass === 'force'
       ? `🚨 FORCE SELL – Rtt hiện tại ${fmtPct(rtt)} – Cần xử lý NGAY`
       : `🔴 CALL MARGIN – Rtt hiện tại ${fmtPct(rtt)} – Cần bổ sung tài sản`;
@@ -334,25 +375,33 @@ function recalcAll() {
     panel.style.display = 'none';
   }
 
-  // Tab 2 propagate
+  // Tab 2 propagate — nộp tiền & bán CP theo CMRp (dùng depFor/sellFor ở trên).
   $('vV').textContent = fmtVND(V); $('vD').textContent = fmtVND(D);
   $('vE').textContent = fmtVND(E); $('vRtt').textContent = fmtPct(rtt);
-  const d50 = Math.max(0, D/(1-0.5) - V);
-  const d35 = Math.max(0, D/(1-0.35) - V);
+  // Rtt sau nộp C (CMRp): cash'=cash+C; còn vay → mẫu=PV.
+  const rttAfterDep  = C => { const den = PV + Math.max(cash + C - D, 0); return den>0 ? (PV+cash+C-D)/den : 0; };
+  // Rtt sau bán S (CMRp): PV↓S·tsAvg, nợ↓S·(1−fsSell), tiền dư nếu trả hết nợ.
+  const rttAfterSell = S => {
+    const PVa = Math.max(0, PV - S*tsAvg), recv = S*(1-fsSell);
+    const Da = Math.max(0, D - recv), ca = Math.max(0, cash + recv - (D - Da));
+    const den = PVa + Math.max(ca - Da, 0); return den>0 ? (PVa+ca-Da)/den : 0;
+  };
+  const d50 = depFor(0.5), d35 = depFor(0.35);
   $('d50').textContent = fmtVND(d50);
   $('d35').textContent = fmtVND(d35);
-  $('d50r').textContent = fmtPct(d50>0 ? (E+d50)/(V+d50) : rtt);
-  $('d35r').textContent = fmtPct(d35>0 ? (E+d35)/(V+d35) : rtt);
-  const s35 = Math.max(0, V - E/0.35);
-  const s50 = Math.max(0, V - E/0.5);
+  $('d50r').textContent = fmtPct(d50>0 ? rttAfterDep(d50) : rtt);
+  $('d35r').textContent = fmtPct(d35>0 ? rttAfterDep(d35) : rtt);
+  const s35 = sellFor(0.35), s50 = sellFor(0.5);
   $('s35').textContent = fmtVND(s35);
   $('s50').textContent = fmtVND(s50);
-  $('s35r').textContent = fmtPct(s35>0 ? E/(V-s35) : rtt);
-  $('s50r').textContent = fmtPct(s50>0 ? E/(V-s50) : rtt);
+  $('s35r').textContent = fmtPct(s35>0 ? rttAfterSell(s35) : rtt);
+  $('s50r').textContent = fmtPct(s50>0 ? rttAfterSell(s50) : rtt);
 
   // Tab 3 propagate
   $('bV').textContent = fmtVND(V); $('bD').textContent = fmtVND(D);
   $('bRtt').textContent = fmtPct(rtt); $('bDmax').textContent = fmtVND(E);
+  // EE (đệm Rtt 50%) = vốn chủ còn lại trên mức ký quỹ tối thiểu = AB − 50%×PV (≥0).
+  if ($('bEE')) $('bEE').textContent = fmtVND(Math.max(0, AB - 0.5 * PV));
   $('bRoom').textContent = fmtVND(getMaxLoan() - D); $('bM').textContent = fmtVND(cash);
 
   recalcBuy(V, D, room, cash);
@@ -377,39 +426,59 @@ function recalcBuy(V, D, room, cash) {
 
   $('bR').textContent = (r*100).toFixed(0) + '%';
 
-  // ── CÔNG THỨC CHUẨN OCBS (File tính sức mua - OCBS 1) ──────────────────
-  //   Sức mua KHÔNG dựa tiền mặt mà dựa DƯ KÝ QUỸ (EE) — vốn chủ dư trên mức ký quỹ
-  //   tối thiểu. Còn EE > 0 thì mua được dù tiền mặt = 0.
-  //     E (vốn chủ) = V − D ;  MR (ký quỹ yêu cầu) = V × (1 − CCR)
-  //     EE = E − MR = E − V×(1−CCR)
-  //     Sức mua B = EE / (1 − CCR×T) ;  CCR = tỷ lệ cho vay margin của mã (r), T = kỳ = 1
-  //   Tiền mặt (nếu có) cộng thêm: cash/(1−CCR×T). Cuối cùng kẹp hạn mức dư nợ.
+  // ── CÔNG THỨC SỨC MUA OCBS (File tính sức mua - OCBS 1) ───────────────────
+  //   Mua bằng tài sản đảm bảo: chi tiền = GT lệnh + phí (GT×fb); nợ tăng = chi − tiền mặt.
+  //   Phí giao dịch trả bằng tiền/vốn, KHÔNG thành tài sản → giảm vốn chủ.
+  //   Sức mua = GT lệnh tối đa giữ Rtt (CMRp) ≥ mức ký quỹ duy trì MMR (50%).
+  //   Giải Rtt = MMR với PV' = PV + GT×ts, D' = D + GT(1+fb) − cash:
+  //     GT_max = (D − cash − PV×(1−MMR)) / (ts×(1−MMR) − (1+fb))
+  //   (mẫu số luôn âm → GT dương). Mua hết GT_max thì Rtt chạm đúng 50% (đã tính phí).
+  //   Tách hiển thị: phần từ dư ký quỹ (cash=0) và phần tăng thêm nhờ tiền mặt.
   const lim       = getStockLimit(sym);                 // HM 1 mã (null nếu không có)
   const acctRoom  = Math.max(0, getMaxLoan() - D);      // hạn mức nợ còn lại toàn TK
-  const E         = V - D;                              // vốn chủ
-  const CCR       = r;                                  // tỷ lệ cho vay = tỷ lệ margin của mã
-  const T         = 1;
+  const acc       = STATE.account || {};
+  const PV        = (acc.PV != null) ? acc.PV : (V - cash);  // tài sản chiết khấu (Excel D9)
+  const MR        = (acc.totMRpv != null) ? acc.totMRpv : PV * 0.5;  // ký quỹ YC danh mục (Excel V42)
+  const AB        = V - D;                              // vốn chủ chiết khấu = Vasset − D
+  const CCR       = r;                                  // tỷ lệ cho vay = tỷ lệ margin của mã mua
+  const MMR       = 0.5;                                // ký quỹ duy trì
+  const tsBuyR    = getTs(sym);                         // tỷ lệ tài sản của mã mua (chiết khấu PV)
+  const EE        = AB - MR;                            // dư ký quỹ (Excel D15 = AB − MR)
 
-  const EE        = E - V * (1 - CCR);                  // dư ký quỹ
-  const denomB    = 1 - CCR * T;
-  const bpEquity  = (EE > 0 && denomB > 1e-12) ? EE / denomB : 0;   // sức mua từ dư ký quỹ
-  const bpCashAdd = (denomB > 1e-12) ? cash / denomB : 0;           // tiền mặt cộng thêm
-
-  // Sức mua trước khi kẹp hạn mức dư nợ
-  const bpBeforeLimit = bpEquity + bpCashAdd;
-
-  // Kẹp hạn mức dư nợ: phần vay = GT × CCR ≤ min(HM 1 mã, HM tài khoản 81 tỷ).
-  const loanCap = (lim != null) ? Math.min(acctRoom, lim) : acctRoom;
-  const bpByLoan = CCR > 0 ? loanCap / CCR : Infinity;
-  const bpStock  = (lim != null && CCR > 0) ? lim / CCR : Infinity;
-  const bpAcct   = CCR > 0 ? acctRoom / CCR : Infinity;
+  // Mã NGOÀI danh mục ký quỹ (r=0): KHÔNG vay được → mua 100% bằng tiền mặt.
+  //   Sức mua từ vốn chủ/ký quỹ = 0; chỉ mua được = cash/(1+phí). Nợ không tăng.
+  let bpEquity, bpBeforeLimit, bpCashAdd, bpByLoan, bpStock, bpAcct, loanCap;
+  if (r <= 0) {
+    bpEquity = 0;                                       // không đòn bẩy
+    bpBeforeLimit = cash / (1 + fb);                    // mua hết bằng tiền (trừ phí)
+    bpCashAdd = bpBeforeLimit;
+    loanCap = 0;
+    bpByLoan = Infinity;                                // không phát sinh nợ → không bị HM nợ chặn
+    bpStock = Infinity; bpAcct = Infinity;
+  } else {
+    // GT lệnh tối đa giữ Rtt ≥ MMR, ĐÃ TÍNH phí giao dịch. denom < 0 → GT ≥ 0.
+    const denomGT = tsBuyR * (1 - MMR) - (1 + fb);
+    const bpFor = c => denomGT < -1e-12 ? Math.max(0, (D - c - PV * (1 - MMR)) / denomGT) : 0;
+    bpEquity = bpFor(0);                                // sức mua khi chỉ dùng dư ký quỹ (cash=0)
+    bpBeforeLimit = bpFor(cash);                        // sức mua có tính tiền mặt
+    bpCashAdd = Math.max(0, bpBeforeLimit - bpEquity);  // phần tăng thêm nhờ tiền mặt
+    // Kẹp hạn mức dư nợ: nợ phát sinh = GT − cash ≤ min(HM 1 mã, HM tài khoản 81 tỷ).
+    loanCap  = (lim != null) ? Math.min(acctRoom, lim) : acctRoom;
+    bpByLoan = loanCap + cash;                          // GT tối đa để nợ ≤ loanCap
+    bpStock  = (lim != null) ? lim + cash : Infinity;
+    bpAcct   = acctRoom + cash;
+  }
 
   const bpTotal = Math.max(0, Math.min(bpBeforeLimit, bpByLoan));
   const bpLoan  = bpEquity;                             // alias hiển thị "sức mua từ dư ký quỹ"
 
   const qtyMax = price > 0 ? Math.floor(bpTotal / price / 100) * 100 : 0;
-  const fee    = qtyMax * price * fb;
-  const loan   = qtyMax * price * r;
+  const gtMax  = qtyMax * price;                        // giá trị lệnh mua tối đa
+  const fee    = gtMax * fb;                            // phí giao dịch mua
+  // Chi tiền = GT lệnh + phí. Nợ tăng = chi − tiền mặt khách bỏ ra (tiền mặt=0 → vay cả GT+phí).
+  const spendMax    = gtMax + fee;
+  const cashUsedMax = Math.min(cash, spendMax);
+  const loan        = spendMax - cashUsedMax;           // dư nợ phát sinh thực tế (gồm phí nếu phải vay)
 
   // Yếu tố đang chặn KL = ràng buộc có GT lệnh nhỏ nhất.
   const constraints = [
@@ -427,18 +496,23 @@ function recalcBuy(V, D, room, cash) {
   $('bQtyMax').textContent  = fmtNum(qtyMax);
   $('bFee').textContent     = fmtVND(fee);
   $('bLoan').textContent    = fmtVND(loan);
-  const Vafter = V + qtyMax * price;
-  const Dafter = D + loan;
-  $('bRttAfter').textContent = Vafter > 0 ? fmtPct((Vafter - Dafter) / Vafter) : '—';
+  // Rtt sau khi mua (theo CMRp): PV tăng giá trị CK mới đã chiết khấu (gtMax×ts);
+  // tiền mặt giảm phần đã dùng; nợ tăng loan. Mua hết sức mua → Rtt chạm 50% (mức ký quỹ tối thiểu).
+  const PVafter   = PV + gtMax * tsBuyR;
+  const cashAfter = cash - cashUsedMax;
+  const Dafter    = D + loan;
+  const denAfter  = PVafter + Math.max(cashAfter - Dafter, 0);
+  $('bRttAfter').textContent = denAfter > 0
+    ? fmtPct((PVafter + cashAfter - Dafter) / denAfter)
+    : '—';
   if ($('bBoundBy')) $('bBoundBy').textContent = qtyMax > 0 ? boundBy : '—';
 
-  // Ghi chú ngưỡng Rtt: mua margin tỷ lệ r → Rtt hội tụ về (1−r), KHÔNG xuống thấp hơn.
-  // Đây là lý do mã r=40% mua bao nhiêu Rtt vẫn ≥ 60%, mã r=50% vẫn ≥ 50%.
-  const floor = 1 - r;
+  // Ghi chú ngưỡng Rtt: mua bằng tài sản đảm bảo (vay phần thiếu) → Rtt giảm dần về
+  // mức ký quỹ duy trì 50% (MMR). Mã r=0 không vay được → mua bằng tiền, Rtt không tụt.
   if ($('bRttFloorNote')) {
     $('bRttFloorNote').textContent = r > 0
-      ? `mua càng nhiều Rtt càng tiệm cận ${(floor*100).toFixed(0)}% (=1−T.lệ), không xuống thấp hơn`
-      : 'tỷ lệ kết quả — không phải hạn mức';
+      ? `mua hết sức mua → Rtt về mức ký quỹ tối thiểu 50%`
+      : `mã ngoài danh mục ký quỹ (T.lệ 0%) → mua 100% bằng tiền, không vay`;
   }
 
   // ── Mục II mở rộng: KL người dùng tự chọn ──────────────────
@@ -446,7 +520,10 @@ function recalcBuy(V, D, room, cash) {
   const qChosen = qC > 0 ? qC : qtyMax;          // 0 = dùng KL tối đa
   const valC  = qChosen * price;
   const feeC  = valC * fb;
-  const loanC = valC * r;
+  // Chi tiền = GT + phí; nợ thực tăng = chi − tiền mặt bỏ ra (tiền mặt=0 → vay cả GT+phí).
+  const spendC = valC + feeC;
+  const cashUsedC = Math.min(cash, spendC);
+  const loanC = spendC - cashUsedC;              // dư nợ phát sinh thực tế (gồm phí nếu phải vay)
   const eqC   = valC * (1 - r) + feeC;           // vốn tự có CẦN (phần không vay + phí)
   const eqAvail = Math.max(0, EE) + cash;        // vốn chủ KHẢ DỤNG (dư ký quỹ + tiền mặt)
   $('bcVal').textContent    = fmtVND(valC);
@@ -485,11 +562,17 @@ function recalcBuy(V, D, room, cash) {
   }
   rcEl.style.color = (overStock || overAcct) ? '#c0392b' : '#2e7d32';
 
-  const Vc = V + valC, Dc = D + loanC;
-  $('bcRtt').textContent = (qChosen > 0 && Vc > 0) ? fmtPct((Vc - Dc) / Vc) : '—';
+  // Rtt sau khi mua KL tự chọn (theo CMRp): nợ tăng = loanC (GT lệnh − tiền mặt dùng);
+  // PV tăng giá trị CK mới đã chiết khấu (valC×ts).
+  const PVc   = PV + valC * tsBuyR;
+  const cashC = cash - cashUsedC;
+  const Dc    = D + loanC;
+  const denC  = PVc + Math.max(cashC - Dc, 0);
+  $('bcRtt').textContent = (qChosen > 0 && denC > 0)
+    ? fmtPct((PVc + cashC - Dc) / denC) : '—';
   if ($('bcRttFloorNote')) {
     $('bcRttFloorNote').textContent = (qChosen > 0 && r > 0)
-      ? `ngưỡng tiệm cận ${((1 - r)*100).toFixed(0)}% (=1−T.lệ)`
+      ? `mua đúng sức mua → Rtt về 50% (mức ký quỹ tối thiểu)`
       : '';
   }
 
@@ -555,38 +638,52 @@ function recalcDeals() {
   const rp   = Math.min(r, 1 - Rtt);
   $('dRp').textContent = (rp*100).toFixed(2) + '%';
 
+  // Tỷ lệ cho vay HIỆU DỤNG theo mã: rp_eff = min(r, ts×(1−Rtt)).
+  //   Dư nợ = V×rp_eff giữ Rtt (CMRp, cô lập) đúng mục tiêu kể cả khi ts<1.
+  //   Vì tài sản đảm bảo bị chiết khấu theo ts, dư nợ tối đa = PV×(1−Rtt) = V×ts×(1−Rtt).
+  const rpEff = sym => {
+    const rr = (sym && STATE.master[sym.toUpperCase()]) ? getR(sym) : r;
+    const ts = (sym && STATE.master[sym.toUpperCase()]) ? getTs(sym) : 1;
+    return Math.min(rr, ts * (1 - Rtt));
+  };
+
   // Deal 1
+  const sym1 = $('d1Sym').value, ts1 = (sym1 && STATE.master[sym1.toUpperCase()]) ? getTs(sym1) : 1;
+  const rp1 = rpEff(sym1);
   const N1 = getNumVal('d1N'), P1 = getNumVal('d1P');
-  const V1 = N1 * P1;
-  let X1 = V1 * rp / (1 + fb);
-  let debt1 = X1 * (1 + fb);           // = V1 · rp
+  const V1 = N1 * P1;                  // giá trị danh nghĩa (N×P)
+  const PV1 = V1 * ts1;                // giá trị tài sản đã chiết khấu
+  let X1 = V1 * rp1 / (1 + fb);
+  let debt1 = X1 * (1 + fb);           // = V1 · rp1
   // Kẹp theo Hạn mức tối đa 1 mã: dư nợ phát sinh không vượt limit của mã d1Sym
   const lim1 = getStockLimit($('d1Sym').value);
   const cap1 = lim1 != null && debt1 > lim1;
   if (cap1) { debt1 = lim1; X1 = lim1 / (1 + fb); }
   const cash1 = X1 * (1 - fs);
-  showLimitWarn('d1LimitRow', 'd1LimitWarn', cap1, lim1, V1 * rp);
+  showLimitWarn('d1LimitRow', 'd1LimitWarn', cap1, lim1, V1 * rp1);
   $('d1V').textContent   = fmtVND(V1);
   $('d1X').textContent   = fmtVND(X1);
   $('d1Cash').textContent= fmtVND(cash1);
   $('d1Debt').textContent= fmtVND(debt1);
-  $('d1Rtt').textContent = V1>0 ? fmtPct((V1-debt1)/V1) : '—';
+  // Rtt cô lập theo CMRp: tài sản chiết khấu PV1, rút hết tiền (cash=0), nợ = debt1.
+  $('d1Rtt').textContent = PV1>0 ? fmtPct((PV1-debt1)/PV1) : '—';
 
   // Deal 2
+  const rp2 = rpEff($('d2Sym').value);
   const Y = getNumVal('d2Y'), P2 = getNumVal('d2P');
-  let Vneed2 = (rp>0 && (1-fs)>0) ? Y * (1+fb) / (rp * (1-fs)) : 0;
-  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ phát sinh = Vreal2·rp không vượt limit
-  // → V tối đa = limit/rp. Nếu Vneed2 vượt ngưỡng này thì không rút đủ Y bằng 1 mã.
+  let Vneed2 = (rp2>0 && (1-fs)>0) ? Y * (1+fb) / (rp2 * (1-fs)) : 0;
+  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ phát sinh = Vreal2·rp2 không vượt limit
+  // → V tối đa = limit/rp2. Nếu Vneed2 vượt ngưỡng này thì không rút đủ Y bằng 1 mã.
   const lim2 = getStockLimit($('d2Sym').value);
-  const cap2 = lim2 != null && rp > 0 && Vneed2 * rp > lim2;
-  if (cap2) Vneed2 = lim2 / rp;        // V bị kẹp ở mức tạo dư nợ = limit
+  const cap2 = lim2 != null && rp2 > 0 && Vneed2 * rp2 > lim2;
+  if (cap2) Vneed2 = lim2 / rp2;       // V bị kẹp ở mức tạo dư nợ = limit
   const N2 = P2>0 ? Math.ceil(Vneed2 / P2 / 100) * 100 : 0;
   let Vreal2 = N2 * P2;
-  let debt2 = Vreal2 * rp;
+  let debt2 = Vreal2 * rp2;
   // N2 làm tròn LÊN có thể đẩy debt vượt limit lần nữa → kẹp lại debt và tiền rút theo limit
   if (lim2 != null && debt2 > lim2) debt2 = lim2;
   const X2 = debt2 / (1 + fb);
-  showLimitWarn('d2LimitRow', 'd2LimitWarn', cap2, lim2, (rp>0 ? Y*(1+fb)/(rp*(1-fs)) : 0) * rp);
+  showLimitWarn('d2LimitRow', 'd2LimitWarn', cap2, lim2, (rp2>0 ? Y*(1+fb)/(rp2*(1-fs)) : 0) * rp2);
   $('d2V').textContent    = fmtVND(Vneed2);
   $('d2N').textContent    = fmtNum(N2);
   $('d2Vreal').textContent= fmtVND(Vreal2);
@@ -594,15 +691,16 @@ function recalcDeals() {
   $('d2Debt').textContent = fmtVND(debt2);
 
   // Deal 3
+  const rp3 = rpEff($('d3Sym').value);
   const Z = getNumVal('d3Z'), P3 = getNumVal('d3P');
   // Kẹp theo Hạn mức tối đa 1 mã: dư nợ mong muốn Z không thể vượt limit bằng 1 mã.
   const lim3 = getStockLimit($('d3Sym').value);
   const cap3 = lim3 != null && Z > lim3;
   const Zeff = cap3 ? lim3 : Z;        // dư nợ thực tế đạt được
-  const Vneed3 = rp > 0 ? Zeff / rp : 0;
+  const Vneed3 = rp3 > 0 ? Zeff / rp3 : 0;
   const N3 = P3>0 ? Math.ceil(Vneed3 / P3 / 100) * 100 : 0;
   const Vreal3 = N3 * P3;
-  let debt3 = Vreal3 * rp;
+  let debt3 = Vreal3 * rp3;
   if (lim3 != null && debt3 > lim3) debt3 = lim3;   // N3 tròn lên không vượt trần
   const X3 = debt3 / (1 + fb);
   showLimitWarn('d3LimitRow', 'd3LimitWarn', cap3, lim3, Z);
@@ -616,23 +714,24 @@ function recalcDeals() {
   //   Loan       = N · Pref · r'
   //   Cash chi   = N · Pbuy · (1+fb) − N · Pref · r'  = N · [Pbuy·(1+fb) − Pref·r']
   //   Đặt = X → N = floor( X / [Pbuy·(1+fb) − Pref·r'] / 100 ) × 100
+  const rp4 = rpEff($('d4Sym').value);   // tỷ lệ cho vay hiệu dụng của mã d4 (theo ts & Rtt)
   const X4 = getNumVal('d4X');
   const P4ref = getNumVal('d4P');
   const P4buy = getNumVal('d4Pbuy') || P4ref;
-  const perShareCash = P4buy * (1 + fb) - P4ref * rp;  // tiền mặt cần cho 1 cp
+  const perShareCash = P4buy * (1 + fb) - P4ref * rp4;  // tiền mặt cần cho 1 cp
   const Nmax4 = (perShareCash > 0) ? X4 / perShareCash : 0;
   let N4 = Math.max(0, Math.floor(Nmax4 / 100) * 100);
-  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ N4·Pref·rp không vượt limit của mã d4Sym
+  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ N4·Pref·rp4 không vượt limit của mã d4Sym
   const lim4 = getStockLimit($('d4Sym').value);
-  const cap4 = lim4 != null && rp > 0 && P4ref > 0 && N4 * P4ref * rp > lim4;
+  const cap4 = lim4 != null && rp4 > 0 && P4ref > 0 && N4 * P4ref * rp4 > lim4;
   if (cap4) {
-    const nByLimit = Math.floor(lim4 / (P4ref * rp) / 100) * 100;
+    const nByLimit = Math.floor(lim4 / (P4ref * rp4) / 100) * 100;
     N4 = Math.max(0, Math.min(N4, nByLimit));
   }
-  showLimitWarn('d4LimitRow', 'd4LimitWarn', cap4, lim4, Math.floor(Nmax4/100)*100 * P4ref * rp);
+  showLimitWarn('d4LimitRow', 'd4LimitWarn', cap4, lim4, Math.floor(Nmax4/100)*100 * P4ref * rp4);
   const Vcost4   = N4 * P4buy;            // chi phí mua (giá đặt)
   const VrefVal4 = N4 * P4ref;            // giá trị stock để tính Rtt (giá TC)
-  const debt4    = VrefVal4 * rp;         // dư nợ vay margin
+  const debt4    = VrefVal4 * rp4;        // dư nợ vay margin
   const cash4    = N4 * perShareCash;     // tiền mặt thực dùng
   $('d4V').textContent    = fmtVND(Vcost4);
   $('d4N').textContent    = fmtNum(N4);
@@ -640,12 +739,15 @@ function recalcDeals() {
   $('d4Cash').textContent = fmtVND(cash4);
   $('d4Debt').textContent = fmtVND(debt4);
   $('d4Rem').textContent  = fmtVND(Math.max(0, X4 - cash4));
-  // Rtt sau = (V_sau − D_sau) / V_sau. V_sau cộng stock_ref + tiền nộp dư + tài khoản cũ.
-  const acc = STATE.account || { V:0, D:0 };
-  const Vafter4 = acc.V + VrefVal4 + Math.max(0, X4 - cash4);
-  const Dafter4 = acc.D + debt4;
-  $('d4Rtt').textContent = (Vafter4 > 0 && N4 > 0)
-    ? fmtPct((Vafter4 - Dafter4) / Vafter4)
+  // Rtt sau (CMRp) — TÍNH ĐỘC LẬP, chỉ trên giao dịch này (KHÔNG cộng danh mục Tab 1).
+  //   PV = giá trị CK mới đã chiết khấu (VrefVal4 × ts); tiền = tiền nộp dư; nợ = debt4.
+  const ts4 = getTs($('d4Sym').value);
+  const PVafter4   = VrefVal4 * ts4;
+  const cashAfter4 = Math.max(0, X4 - cash4);
+  const Dafter4    = debt4;
+  const den4 = PVafter4 + Math.max(cashAfter4 - Dafter4, 0);
+  $('d4Rtt').textContent = (den4 > 0 && N4 > 0)
+    ? fmtPct((PVafter4 + cashAfter4 - Dafter4) / den4)
     : '—';
 }
 
@@ -707,14 +809,25 @@ function renderSellTable() {
   recalcSell();
 }
 
+// Tổng GT bán (giá thị trường) cần để Rtt đạt target, theo CMRp + chiết khấu ts.
+//   Bán S: PV↓ S·tsAvg, nợ↓ S·(1−fs). Giải (PV−S·ts − (D−S(1−fs)))/(PV−S·ts) = t
+//   → S = (D − PV·(1−t)) / (1 − fs − ts + t·ts). tsAvg = PV/totMV (bình quân danh mục CP).
+function sellNeededForTarget(acc, fs, target) {
+  const PV = acc.PV || 0, D = acc.D || 0, totMV = acc.totMV || 0;
+  const tsAvg = totMV > 0 ? PV / totMV : 1;
+  const den = 1 - fs - tsAvg + target * tsAvg;
+  return den > 1e-9 ? Math.max(0, (D - PV * (1 - target)) / den) : 0;
+}
+
 function recalcSell() {
-  const acc = STATE.account || { V:0, D:0, E:0, totDmax:0 };
-  const { V, D, E } = acc;
+  const acc = STATE.account || { V:0, Vmkt:0, PV:0, D:0, E:0, cash:0, totDmax:0 };
+  const { D } = acc;
+  const PV = acc.PV || 0, cashNow = acc.cash || 0;
   const fs = getFs();
   const holds = getSellableHoldings();
 
-  // Tổng GT bán + tiền trả nợ; đồng thời tính Dmax giảm do bán mã có margin
-  let S = 0, dmaxDrop = 0;
+  // Tổng GT bán (giá thị trường) + sụt PV (đã chiết khấu theo ts) + Dmax giảm.
+  let S = 0, pvDrop = 0, dmaxDrop = 0;
   for (const h of holds) {
     const plan = STATE.sellPlan[h.sym];
     if (!plan || !plan.checked) continue;
@@ -722,15 +835,19 @@ function recalcSell() {
     const px = plan.price || h.price;
     const gt = q * px;
     S += gt;
-    // Bán q cp mã này → mất GT đánh giá q·px, giảm Dmax = (q·px)·r (kẹp theo limit không xét ở mức mã đơn lẻ)
+    pvDrop   += gt * getTs(h.sym);      // PV sụt theo giá trị tài sản đã chiết khấu
+    // Bán q cp mã này → giảm Dmax = (q·px)·r (kẹp theo limit không xét ở mức mã đơn lẻ)
     dmaxDrop += gt * h.r;
   }
-  const cash = S * (1 - fs);            // tiền thực trả nợ
+  const cash = S * (1 - fs);            // tiền thực trả nợ (giá thị trường)
   const fee  = S * fs;                  // phí + thuế mất đi
-  const Vafter = V - S;
-  const Dafter = Math.max(0, D - cash);
-  const Eafter = Vafter - Dafter;       // = E − S·fs
-  const rttAfter = Vafter > 0 ? Eafter / Vafter : 0;
+  // Sau bán: PV↓ pvDrop, tiền nhận về cash dùng trả nợ → D↓; tiền dư (nếu cash>D) ở lại.
+  const PVafter   = Math.max(0, PV - pvDrop);
+  const Dafter    = Math.max(0, D - cash);
+  const cashAfter = Math.max(0, cashNow + cash - (D - Dafter)); // phần tiền chưa dùng trả nợ
+  const Vafter    = PVafter + cashAfter;                        // tổng tài sản (chiết khấu) sau bán
+  const denAfter  = PVafter + Math.max(cashAfter - Dafter, 0);  // mẫu số CMRp
+  const rttAfter  = denAfter > 0 ? (PVafter + cashAfter - Dafter) / denAfter : 0;
   const dmaxAfter = Math.max(0, (acc.totDmax || 0) - dmaxDrop);
   const roomAfter = dmaxAfter - Dafter;
 
@@ -755,8 +872,8 @@ function recalcSell() {
     stEl.textContent = `✅ Đạt mục tiêu Rtt ≥ ${(target*100)|0}% (sau bán: ${fmtPct(rttAfter)})`;
     stEl.className = 'status safe';
   } else {
-    // còn thiếu bao nhiêu GT bán nữa để đạt target (công thức có phí)
-    const needS = (fs - target) !== 0 ? (E - target*V)/(fs - target) : 0;
+    // còn thiếu bao nhiêu GT bán nữa để đạt target (CMRp + chiết khấu ts)
+    const needS = sellNeededForTarget(acc, fs, target);
     const more  = Math.max(0, needS - S);
     stEl.textContent = `⚠️ Chưa đủ — Rtt sau bán ${fmtPct(rttAfter)} < ${(target*100)|0}%. Cần bán thêm ~${fmtVND(more)} đ GT nữa.`;
     stEl.className = 'status watch';
@@ -764,15 +881,12 @@ function recalcSell() {
 }
 
 // Tự chia KL bán theo thứ tự mã đang được tick, đủ để đạt mục tiêu Rtt.
-// Tổng GT bán cần (có phí): S* = (E − Rtt*·V)/(fs − Rtt*).
+// Tổng GT bán cần (CMRp + chiết khấu ts): xem sellNeededForTarget.
 function autoFillSell() {
-  const acc = STATE.account || { V:0, D:0, E:0 };
-  const { V, E } = acc;
+  const acc = STATE.account || { V:0, D:0, E:0, PV:0, totMV:0 };
   const fs = getFs();
   const target = +$('sellTarget').value || 0.35;
-  const denom = fs - target;
-  let needS = denom !== 0 ? (E - target*V)/denom : 0;
-  needS = Math.max(0, needS);
+  let needS = sellNeededForTarget(acc, fs, target);
 
   const holds = getSellableHoldings();
   // Chỉ chia cho các mã đang tick; nếu chưa tick mã nào → tick tất cả theo thứ tự bảng

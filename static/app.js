@@ -292,8 +292,6 @@ function recalcAll() {
   $('rD').textContent = fmtVND(D);
   $('rE').textContent = fmtVND(E);
   $('rRtt').textContent = fmtPct(rtt);
-  $('rDmax').textContent = fmtVND(totDmax);
-  $('rRoom').textContent = fmtVND(room);
 
   const loanRoom = getMaxLoan() - D;
   if ($('rLoanRoom')) {
@@ -389,16 +387,30 @@ function recalcBuy(V, D, room, cash) {
   const bpAcct    = r > 0 ? acctRoom / r : Infinity;                     // GT chặn bởi HM 81 tỷ
   const bpLoan    = r > 0 ? loanCap / r : 0;            // GT vay tối đa (đã min 2 hạn mức)
   const bpCash    = r < 1 ? cash / (1 - r) : 0;         // GT thêm nhờ tiền mặt
-  const bpTotal   = bpLoan + bpCash;                    // GT lệnh tối đa
+
+  // Ràng buộc Rtt ≥ 50%: sau mua GT lệnh X, Rtt' = (E + X(1−r))/(V+X) ≥ 0.5.
+  //   X·(0.5−r) ≥ 0.5V − E. Với r > 0.5 (hệ số 0.5−r < 0): X ≤ (E − 0.5V)/(r − 0.5) → TRẦN.
+  //   Với r ≤ 0.5: mua margin chỉ đưa Rtt hội tụ về (1−r) ≥ 50% → luôn thỏa (không chặn).
+  const E = V - D;
+  let bpRtt = Infinity;
+  if (r > 0.5 + 1e-12) {
+    const x = (E - 0.5 * V) / (r - 0.5);
+    bpRtt = x > 0 ? x : 0;                              // Rtt hiện đã <50% thì không mua thêm được
+  }
+
+  // GT lệnh tối đa = min(các hạn mức vay) + tiền mặt, NHƯNG không vượt ràng buộc Rtt≥50%.
+  const bpByLimits = bpLoan + bpCash;                   // chặn bởi HM vay + cash
+  const bpTotal    = Math.min(bpByLimits, bpRtt);       // kẹp thêm ràng buộc Rtt≥50%
 
   const qtyMax = price > 0 ? Math.floor(bpTotal / price / 100) * 100 : 0;
   const fee    = qtyMax * price * fb;
   const loan   = qtyMax * price * r;
 
-  // Yếu tố đang chặn: hạn mức nào nhỏ hơn (so theo GT lệnh, bỏ phần cash chung cho cả 2).
+  // Yếu tố đang chặn KL (so theo GT lệnh). Ưu tiên báo Rtt nếu nó là ràng buộc chặt nhất.
   let boundBy = 'HM tài khoản (81 tỷ)';
   if (bpStock < bpAcct - 1) boundBy = 'HM 1 mã (Phụ lục 1)';
-  if (!isFinite(bpStock) && !isFinite(bpAcct)) boundBy = '—';
+  if (bpRtt < bpByLimits - 1) boundBy = 'Rtt ≥ 50%';
+  if (!isFinite(bpStock) && !isFinite(bpAcct) && !isFinite(bpRtt)) boundBy = '—';
 
   // Cảnh báo khi HM 1 mã là ràng buộc chặt hơn HM tài khoản
   showLimitWarn('bLimitRow', 'bLimitWarn', lim != null && lim < acctRoom, lim, acctRoom);

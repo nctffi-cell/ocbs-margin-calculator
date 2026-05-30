@@ -594,32 +594,42 @@ function recalcBuy(V, D, room, cash) {
     : (wantOverStock ? '❌ Vượt HM 1 mã' : '❌ Vượt HM 81 tỷ');
   $('bDeposit').textContent  = fmtVND(deposit);
 
-  // Section IV: ngưỡng giá (giả định chỉ có 1 mã này)
-  // Đơn giản: chỉ tính cho riêng mã bSym tại qtyWant (nếu có) hoặc qtyMax
-  const N = qtyWant > 0 ? qtyWant : qtyMax;
+  // Section IV: CẢ DANH MỤC giảm bao nhiêu % thì Call/Force?
+  //   Cơ sở = danh mục Tab 1 (PV, cash, D). Nếu Tab 3 có mã mua thêm (qChosen>0) → ghép vào:
+  //     PV' = PV + valC·ts (tài sản mới chiết khấu); D' = D + loanC (vay nếu hết tiền);
+  //     cash' = cash − cashUsedC (tiền tự bỏ ra mua).
+  //   Toàn bộ giá CP nhân hệ số x (PV tuyến tính theo giá). Rtt = (x·PV' + cash' − D')/(x·PV' + max(cash'−D',0)).
+  //   Giải Rtt = T (cash' < D' mới có nợ ròng): x = (D' − cash') / (PV'·(1 − T)). % giảm = 1 − x.
   const note = $('bThreshNote');
-  if (N > 0 && price > 0 && D > 0) {
-    const Vbase = V - price * N;
-    const pCall  = (D/0.65 - Vbase) / N;
-    const pForce = (D/0.75 - Vbase) / N;
-    // Ngưỡng ≤ 0 nghĩa là dù giá mã này về 0đ, Rtt vẫn chưa chạm mốc → an toàn tuyệt đối.
-    const SAFE = '✅ An toàn (giá về 0đ vẫn không Call)';
-    $('bPCall').textContent  = pCall  > 0 ? fmtVND(pCall)  : SAFE;
-    $('bPForce').textContent = pForce > 0 ? fmtVND(pForce) : SAFE;
-    $('bDCall').textContent  = pCall  > 0 ? fmtPct((price - pCall)  / price) : '> 100%';
-    $('bDForce').textContent = pForce > 0 ? fmtPct((price - pForce) / price) : '> 100%';
-    if (note) {
-      if (pCall <= 0) {
-        note.style.display = '';
-        note.innerHTML = 'Ngưỡng âm/“an toàn” = dư nợ quá nhỏ so với tài sản: <b>chỉ riêng mã này rớt thì không đủ kéo Rtt xuống mốc Call</b>, dù về 0đ. ⚠️ Lưu ý: nếu CẢ danh mục cùng giảm thì tài khoản vẫn có thể bị Call sớm hơn — phần này chỉ xét 1 mã.';
-      } else {
-        note.style.display = 'none';
-      }
-    }
-  } else {
-    $('bPCall').textContent = '—'; $('bPForce').textContent = '—';
-    $('bDCall').textContent = '—'; $('bDForce').textContent = '—';
-    if (note) note.style.display = 'none';
+  const hasBuy = qChosen > 0 && price > 0;
+  const PVt   = PV   + (hasBuy ? valC * tsBuyR : 0);   // PV danh mục (ghép mã mua thêm nếu có)
+  const casht = cash - (hasBuy ? cashUsedC : 0);       // tiền mặt còn lại
+  const Dt    = D    + (hasBuy ? loanC : 0);           // dư nợ tổng
+  const cmCall = +$('pCall').value || 0.35;            // ngưỡng Call (mặc định 35%)
+  const fsForce= +$('pForce').value || 0.25;           // ngưỡng Force (mặc định 25%)
+  // x = tỷ lệ giá CP còn lại để Rtt chạm ngưỡng T (≤1 mới có nghĩa: cần giá GIẢM).
+  const dropFor = T => {
+    if (PVt <= 0) return null;                 // không có CP để giảm
+    if (casht >= Dt) return Infinity;          // không vay ròng → không bao giờ Call
+    const x = (Dt - casht) / (PVt * (1 - T));
+    if (x >= 1) return Infinity;               // đã cần giá tăng mới tới ngưỡng → an toàn
+    return 1 - Math.max(0, x);                 // % giảm danh mục CP
+  };
+  const dCall = dropFor(cmCall), dForce = dropFor(fsForce);
+  const SAFE = '✅ Không bao giờ Call';
+  const fmtDrop = d => d == null ? '—' : (d === Infinity ? SAFE : fmtPct(d));
+  $('bPCall').textContent  = fmtDrop(dCall);
+  $('bPForce').textContent = fmtDrop(dForce);
+  // 2 dòng "% giảm" cũ dùng để hiển thị Rtt hiện tại của danh mục (đã ghép) cho dễ đối chiếu.
+  const denNow = PVt + Math.max(casht - Dt, 0);
+  const rttNow = denNow > 0 ? (PVt + casht - Dt) / denNow : null;
+  $('bDCall').textContent  = rttNow != null ? fmtPct(rttNow) : '—';
+  $('bDForce').textContent = hasBuy ? 'có ghép mã mua thêm' : 'danh mục hiện tại';
+  if (note) {
+    note.style.display = '';
+    note.innerHTML = hasBuy
+      ? `Đã ghép <b>${sym || 'mã mua thêm'}</b> (KL ${fmtNum(qChosen)}) vào danh mục. Toàn bộ cổ phiếu giảm tới mức trên thì Rtt chạm Call/Force. Tiền vay thêm ${fmtVND(loanC)} đã tính vào nợ.`
+      : `Xét <b>danh mục hiện tại</b> (Tab 1). Toàn bộ cổ phiếu cùng giảm bao nhiêu % thì Rtt chạm Call/Force. Nhập mã ở mục II để mô phỏng ghép mã mua thêm.`;
   }
 }
 

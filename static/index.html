@@ -238,12 +238,12 @@
     </div>
 
     <div class="card">
-      <div class="card-header">IV. NGƯỠNG GIÁ – KIỂM TRA</div>
-      <div class="hint">Kịch bản: <b>CHỈ riêng mã đang xét rớt giá</b>, các mã khác trong danh mục giữ nguyên. Trả lời "giá mã này phải rớt xuống bao nhiêu thì tài khoản bị Call/Force?". Mã & KL theo input bên trên, giá hiện tại lấy từ ô Giá ở mục II.</div>
-      <div class="row"><label>Giá Call Margin (Rtt = 35%)</label><div class="calc" id="bPCall">0</div><span class="note">Giá làm Rtt tụt xuống 35%</span></div>
-      <div class="row"><label>Giá Force Sell (Rtt = 25%)</label><div class="calc" id="bPForce">0</div><span class="note">Giá làm Rtt tụt xuống 25%</span></div>
-      <div class="row"><label>% giảm đến Call Margin</label><div class="calc" id="bDCall">—</div><span class="note">Còn bao nhiêu % nữa thì Call</span></div>
-      <div class="row"><label>% giảm đến Force Sell</label><div class="calc" id="bDForce">—</div><span class="note">Còn bao nhiêu % nữa thì Force Sell</span></div>
+      <div class="card-header">IV. CẢ DANH MỤC GIẢM BAO NHIÊU % THÌ CALL/FORCE?</div>
+      <div class="hint">Xét <b>cả danh mục cổ phiếu cùng giảm giá</b>. Nếu có nhập mã ở mục II → ghép mã mua thêm (theo KL tùy chọn) vào danh mục rồi tính trên danh mục tổng.</div>
+      <div class="row"><label><b>% giảm đến Call Margin (35%)</b></label><div class="calc star" id="bPCall">—</div><span class="note">Cả DM CP giảm tới đây → Rtt = 35%</span></div>
+      <div class="row"><label><b>% giảm đến Force Sell (25%)</b></label><div class="calc star" id="bPForce">—</div><span class="note">Cả DM CP giảm tới đây → Rtt = 25%</span></div>
+      <div class="row"><label>Rtt hiện tại (đã ghép)</label><div class="calc" id="bDCall">—</div><span class="note">Rtt của danh mục đang xét</span></div>
+      <div class="row"><label>Phạm vi xét</label><div class="calc" id="bDForce">—</div><span class="note">DM hiện tại hay có ghép mã mua thêm</span></div>
       <div class="hint" id="bThreshNote" style="display:none"></div>
     </div>
   </section>

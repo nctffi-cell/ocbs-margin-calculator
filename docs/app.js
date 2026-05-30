@@ -597,17 +597,29 @@ function recalcBuy(V, D, room, cash) {
   // Section IV: ngưỡng giá (giả định chỉ có 1 mã này)
   // Đơn giản: chỉ tính cho riêng mã bSym tại qtyWant (nếu có) hoặc qtyMax
   const N = qtyWant > 0 ? qtyWant : qtyMax;
+  const note = $('bThreshNote');
   if (N > 0 && price > 0 && D > 0) {
     const Vbase = V - price * N;
     const pCall  = (D/0.65 - Vbase) / N;
     const pForce = (D/0.75 - Vbase) / N;
-    $('bPCall').textContent  = fmtVND(pCall);
-    $('bPForce').textContent = fmtVND(pForce);
-    $('bDCall').textContent  = fmtPct((price - pCall) / price);
-    $('bDForce').textContent = fmtPct((price - pForce) / price);
+    // Ngưỡng ≤ 0 nghĩa là dù giá mã này về 0đ, Rtt vẫn chưa chạm mốc → an toàn tuyệt đối.
+    const SAFE = '✅ An toàn (giá về 0đ vẫn không Call)';
+    $('bPCall').textContent  = pCall  > 0 ? fmtVND(pCall)  : SAFE;
+    $('bPForce').textContent = pForce > 0 ? fmtVND(pForce) : SAFE;
+    $('bDCall').textContent  = pCall  > 0 ? fmtPct((price - pCall)  / price) : '> 100%';
+    $('bDForce').textContent = pForce > 0 ? fmtPct((price - pForce) / price) : '> 100%';
+    if (note) {
+      if (pCall <= 0) {
+        note.style.display = '';
+        note.innerHTML = 'Ngưỡng âm/“an toàn” = dư nợ quá nhỏ so với tài sản: <b>chỉ riêng mã này rớt thì không đủ kéo Rtt xuống mốc Call</b>, dù về 0đ. ⚠️ Lưu ý: nếu CẢ danh mục cùng giảm thì tài khoản vẫn có thể bị Call sớm hơn — phần này chỉ xét 1 mã.';
+      } else {
+        note.style.display = 'none';
+      }
+    }
   } else {
     $('bPCall').textContent = '—'; $('bPForce').textContent = '—';
     $('bDCall').textContent = '—'; $('bDForce').textContent = '—';
+    if (note) note.style.display = 'none';
   }
 }
 

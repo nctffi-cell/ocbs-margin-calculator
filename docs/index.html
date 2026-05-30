@@ -239,11 +239,12 @@
 
     <div class="card">
       <div class="card-header">IV. NGƯỠNG GIÁ – KIỂM TRA</div>
-      <div class="hint">Giả định mã đang xét là MWG, KL theo input bên trên. Giá hiện tại tự lấy từ ô Giá ở mục II.</div>
-      <div class="row"><label>Giá Call Margin (Rtt = 35%)</label><div class="calc" id="bPCall">0</div><span></span></div>
-      <div class="row"><label>Giá Force Sell (Rtt = 25%)</label><div class="calc" id="bPForce">0</div><span></span></div>
-      <div class="row"><label>% giảm đến Call Margin</label><div class="calc" id="bDCall">—</div><span></span></div>
-      <div class="row"><label>% giảm đến Force Sell</label><div class="calc" id="bDForce">—</div><span></span></div>
+      <div class="hint">Kịch bản: <b>CHỈ riêng mã đang xét rớt giá</b>, các mã khác trong danh mục giữ nguyên. Trả lời "giá mã này phải rớt xuống bao nhiêu thì tài khoản bị Call/Force?". Mã & KL theo input bên trên, giá hiện tại lấy từ ô Giá ở mục II.</div>
+      <div class="row"><label>Giá Call Margin (Rtt = 35%)</label><div class="calc" id="bPCall">0</div><span class="note">Giá làm Rtt tụt xuống 35%</span></div>
+      <div class="row"><label>Giá Force Sell (Rtt = 25%)</label><div class="calc" id="bPForce">0</div><span class="note">Giá làm Rtt tụt xuống 25%</span></div>
+      <div class="row"><label>% giảm đến Call Margin</label><div class="calc" id="bDCall">—</div><span class="note">Còn bao nhiêu % nữa thì Call</span></div>
+      <div class="row"><label>% giảm đến Force Sell</label><div class="calc" id="bDForce">—</div><span class="note">Còn bao nhiêu % nữa thì Force Sell</span></div>
+      <div class="hint" id="bThreshNote" style="display:none"></div>
     </div>
   </section>
 

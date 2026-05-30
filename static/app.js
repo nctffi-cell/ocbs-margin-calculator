@@ -616,6 +616,13 @@ async function onDealSymBlur(e) {
   if (!sym) return;
   const p = await fetchPrice(sym);
   if (!p) return;
+  // Mã B (mã giao dịch): chỉ fill giá B, không đụng r của mã A lưu ký.
+  if (id === 'd1SymB') {
+    setNumVal($('d1PB'), p.price);
+    $('d1PBnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`;
+    recalcDeals();
+    return;
+  }
   if (id === 'd1Sym') { setNumVal($('d1P'), p.price); $('d1Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   if (id === 'd2Sym') { setNumVal($('d2P'), p.price); $('d2Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
   if (id === 'd3Sym') { setNumVal($('d3P'), p.price); $('d3Pnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`; }
@@ -654,29 +661,38 @@ function recalcDeals() {
 
   // Deal 1 — chuỗi 4 bước: lưu ký A → mua B → bán B → ứng tiền bán B chờ về để rút.
   //   ① Sức mua sinh từ A = dư nợ tối đa debt1 = V_A·rp1 (kẹp theo hạn mức mã A).
-  //   ② Mua B bằng toàn bộ sức mua: GT mua B = debt1 → phí mua  = debt1·fb.
-  //   ③ B về bán hết (giả định hòa giá): GT bán B = debt1 → phí+thuế bán = debt1·fs.
-  //   ④ Ứng tiền bán B chờ về (T+advDays): phí ứng = debt1·pctAdv.
-  //   NET rút = GT bán B − phí mua − phí bán − phí ứng. Dư nợ giữ nguyên (CTCK ghi nợ, A vẫn lưu ký).
+  //   ② Mua cp B: GT mua B = KL_B·giá_B (KL_B=0 → mua tối đa bằng sức mua). Phí mua = GT·fb.
+  //   ③ B về bán hết (hòa giá mua): GT bán B = GT mua B → phí+thuế bán = GT·fs.
+  //   ④ Ứng tiền bán B chờ về (T+advDays): phí ứng = GT·pctAdv.
+  //   NET rút = GT bán B − phí mua − phí bán − phí ứng. Dư nợ = GT mua B (CTCK ghi nợ, A vẫn lưu ký).
   const sym1 = $('d1Sym').value, ts1 = (sym1 && STATE.master[sym1.toUpperCase()]) ? getTs(sym1) : 1;
   const rp1 = rpEff(sym1);
   const N1 = getNumVal('d1N'), P1 = getNumVal('d1P');
   const V1 = N1 * P1;                  // giá trị danh nghĩa (N×P)
   const PV1 = V1 * ts1;                // giá trị tài sản đã chiết khấu
-  let debt1 = V1 * rp1;                // sức mua = dư nợ tối đa từ A
+  let buyPower1 = V1 * rp1;            // ① sức mua = dư nợ tối đa từ A
   // Kẹp theo Hạn mức tối đa 1 mã: dư nợ phát sinh không vượt limit của mã d1Sym
   const lim1 = getStockLimit($('d1Sym').value);
-  const cap1 = lim1 != null && debt1 > lim1;
-  if (cap1) debt1 = lim1;
-  const Vbuy1  = debt1;                // ② GT lệnh mua B = toàn bộ sức mua
-  const Vsell1 = Vbuy1;               // ③ GT bán B (giả định hòa giá mua)
+  const cap1 = lim1 != null && buyPower1 > lim1;
+  if (cap1) buyPower1 = lim1;
+  // ② Mua cp B: KL_B nhập tay; nếu để 0 → mua tối đa bằng sức mua (làm tròn lô 100).
+  const PB1 = getNumVal('d1PB');                              // giá giao dịch B
+  let NB1 = getNumVal('d1NB');                               // KL B nhập tay
+  if (NB1 <= 0) NB1 = PB1 > 0 ? Math.floor(buyPower1 / PB1 / 100) * 100 : 0;
+  let Vbuy1 = NB1 * PB1;                                     // GT mua B = KL × giá
+  // Kẹp GT mua B không vượt sức mua từ A
+  const overBuy1 = Vbuy1 > buyPower1 + 1;
+  if (overBuy1) { NB1 = PB1 > 0 ? Math.floor(buyPower1 / PB1 / 100) * 100 : 0; Vbuy1 = NB1 * PB1; }
+  const Vsell1 = Vbuy1;               // ③ GT bán B (hòa giá mua)
   const feeBuy1  = Vbuy1  * fb;        // phí mua B
   const feeSell1 = Vsell1 * fs;        // phí + thuế bán B (fs đã gồm thuế)
   const feeAdv1  = Vsell1 * pctAdv;    // ④ phí ứng tiền bán B chờ về
   const cash1 = Vsell1 - feeBuy1 - feeSell1 - feeAdv1;   // NET rút được
+  const debt1 = Vbuy1;                // dư nợ phát sinh = GT mua B
   showLimitWarn('d1LimitRow', 'd1LimitWarn', cap1, lim1, V1 * rp1);
   $('d1V').textContent      = fmtVND(V1);
-  $('d1X').textContent      = fmtVND(Vbuy1);
+  $('d1X').textContent      = fmtVND(buyPower1);
+  $('d1VB').textContent     = fmtVND(Vbuy1) + (NB1 ? ` (${fmtNum(NB1)} cp)` : '');
   $('d1FeeBuy').textContent = fmtVND(feeBuy1);
   $('d1FeeSell').textContent= fmtVND(feeSell1);
   $('d1FeeAdv').textContent = fmtVND(feeAdv1);
@@ -1189,10 +1205,10 @@ $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
 ['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant','bQtyChoose',
- 'dR','dRtt','dAdv','dAdvDays','d1N','d1P','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
+ 'dR','dRtt','dAdv','dAdvDays','d1N','d1P','d1NB','d1PB','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 
-['d1Sym','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
+['d1Sym','d1SymB','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
 $('bSym').addEventListener('change', onBuySymBlur);
 
 // ── Tab 2: Phân bổ bán theo mã ─────────────────────────────
@@ -1231,6 +1247,7 @@ $('btnClearRows').onclick = () => {
 async function prefetchDefaultPrices() {
   const targets = [
     { symId: 'd1Sym', priceId: 'd1P', noteId: 'd1Pnote' },
+    { symId: 'd1SymB', priceId: 'd1PB', noteId: 'd1PBnote' },
     { symId: 'd2Sym', priceId: 'd2P', noteId: 'd2Pnote' },
     { symId: 'd3Sym', priceId: 'd3P', noteId: 'd3Pnote' },
     { symId: 'd4Sym', priceId: 'd4P', noteId: 'd4Pnote', buyId: 'd4Pbuy' },

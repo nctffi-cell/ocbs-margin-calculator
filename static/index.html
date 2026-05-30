@@ -263,7 +263,11 @@
       <div class="row"><label>Số CP lưu ký (N)</label><input id="d1N" type="text" inputmode="numeric" data-num value="1000000"><span></span></div>
       <div class="row"><label>Giá CP A (đ)</label><input id="d1P" type="text" inputmode="numeric" data-num value="86000"><span class="note" id="d1Pnote"></span></div>
       <div class="row"><label>V = N × P</label><div class="calc" id="d1V">0</div><span></span></div>
-      <div class="row"><label>Sức mua = GT mua B</label><div class="calc" id="d1X">0</div><span class="note">= V·r' (kẹp hạn mức A)</span></div>
+      <div class="row"><label>Sức mua tối đa</label><div class="calc" id="d1X">0</div><span class="note">= V·r' (kẹp hạn mức A)</span></div>
+      <div class="row"><label>Mã CK (B)</label><input id="d1SymB" type="text" value="MWG"><span class="note">Mã mua về để bán</span></div>
+      <div class="row"><label>Số CP B (KL)</label><input id="d1NB" type="text" inputmode="numeric" data-num value="0"><span class="note">0 = mua tối đa bằng sức mua</span></div>
+      <div class="row"><label>Giá giao dịch B (đ)</label><input id="d1PB" type="text" inputmode="numeric" data-num value="0"><span class="note" id="d1PBnote"></span></div>
+      <div class="row"><label>GT mua B = KL × giá</label><div class="calc" id="d1VB">0</div><span class="note">Không vượt sức mua</span></div>
       <div class="row"><label>② Phí mua B</label><div class="calc" id="d1FeeBuy">0</div><span class="note">= GT mua B · f_b</span></div>
       <div class="row"><label>③ Phí + thuế bán B</label><div class="calc" id="d1FeeSell">0</div><span class="note">= GT bán B · f_s</span></div>
       <div class="row"><label>④ Phí ứng tiền</label><div class="calc" id="d1FeeAdv">0</div><span class="note">= GT bán B · adv·ngày/360</span></div>

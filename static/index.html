@@ -30,6 +30,8 @@
       <div class="row"><label>Phí giao dịch (mua = bán)</label><input id="pFb" type="number" value="0.15" step="0.01" min="0" max="2" placeholder="0.15"><span class="note">Nhập theo % — mặc định 0.15%</span></div>
       <div class="row"><label>Thuế bán</label><div class="calc" style="font-size:13px">0.10% (cố định)</div><span class="note"></span></div>
       <div class="row"><label>Tổng phí + thuế bán</label><div class="calc" id="pFsDisplay">0.25%</div><span class="note">= Phí + 0.1%</span></div>
+      <div class="row"><label>Lãi suất cho vay</label><input id="pLoanRate" type="number" value="13" step="0.5" min="0"><span class="note">%/năm — mặc định 13%</span></div>
+      <div class="row"><label>Lãi ứng trước</label><input id="pAdvRate" type="number" value="13" step="0.5" min="0"><span class="note">%/năm — mặc định 13%</span></div>
       <div class="row"><label>Ngưỡng Call Margin</label><input id="pCall" type="number" value="0.35" step="0.01"><span class="note">Rtt < 35% → Call Margin</span></div>
       <div class="row"><label>Ngưỡng Force Sell</label><input id="pForce" type="number" value="0.25" step="0.01"><span class="note">Rtt < 25% → bán giải chấp</span></div>
       <div class="row"><label>Dư nợ tối đa toàn TK</label><input id="pMaxLoan" type="number" value="81000000000" step="1000000000"><span class="note">Hạn mức OCBS — mặc định 81 tỷ đ</span></div>
@@ -252,8 +254,7 @@
       <div class="row"><label>T.lệ margin CP (r)</label><input id="dR" type="number" value="0.5" step="0.05"><span class="note">Mặc định 50%</span></div>
       <div class="row"><label>Rtt mục tiêu sau giao dịch</label><input id="dRtt" type="number" value="0.5" step="0.05"><span class="note">0.5 = IM ban đầu (an toàn)</span></div>
       <div class="row"><label>r' = min(r, 1−Rtt*)</label><div class="calc" id="dRp">0</div><span class="note">Ràng buộc chặt</span></div>
-      <div class="row"><label>% Phí ứng (lãi/năm)</label><input id="dAdv" type="number" value="13" step="0.5" min="0"><span class="note">%/năm — tính theo số ngày/360</span></div>
-      <div class="row"><label>Số ngày ứng (T+)</label><input id="dAdvDays" type="number" value="2" step="1" min="0"><span class="note">T+2 nếu không có lễ/cuối tuần; có thì cộng thêm</span></div>
+      <div class="row"><label>Số ngày ứng (T+)</label><input id="dAdvDays" type="number" value="2" step="1" min="0"><span class="note">Lãi ứng lấy từ THAM SỐ OCBS; T+2 nếu không lễ/cuối tuần</span></div>
     </div>
 
     <div class="card">
@@ -265,8 +266,8 @@
       <div class="row"><label>V = N × P</label><div class="calc" id="d1V">0</div><span></span></div>
       <div class="row"><label>Sức mua tối đa</label><div class="calc" id="d1X">0</div><span class="note">= V·r' (kẹp hạn mức A)</span></div>
       <div class="row"><label>Mã CK (B)</label><input id="d1SymB" type="text" value="MWG"><span class="note">Mã mua về để bán</span></div>
-      <div class="row"><label>Số CP B (KL)</label><input id="d1NB" type="text" inputmode="numeric" data-num value="0"><span class="note">0 = mua tối đa bằng sức mua</span></div>
-      <div class="row"><label>Giá giao dịch B (đ)</label><input id="d1PB" type="text" inputmode="numeric" data-num value="0"><span class="note" id="d1PBnote"></span></div>
+      <div class="row"><label>Giá giao dịch B (đ)</label><input id="d1PB" type="text" inputmode="numeric" data-num value="0"><span class="note" id="d1PBnote">Giá tham chiếu — có thể sửa</span></div>
+      <div class="row"><label>Số CP B (KL)</label><div class="calc" id="d1NB">0</div><span class="note">Tự tính: mua tối đa bằng sức mua (lô 100)</span></div>
       <div class="row"><label>GT mua B = KL × giá</label><div class="calc" id="d1VB">0</div><span class="note">Không vượt sức mua</span></div>
       <div class="row"><label>② Phí mua B</label><div class="calc" id="d1FeeBuy">0</div><span class="note">= GT mua B · f_b</span></div>
       <div class="row"><label>③ Phí + thuế bán B</label><div class="calc" id="d1FeeSell">0</div><span class="note">= GT bán B · f_s</span></div>

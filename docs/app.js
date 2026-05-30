@@ -12,6 +12,8 @@ const STATE = {
 const fmtVND = n => (n==null || isNaN(n)) ? '—' : Math.round(n).toLocaleString('vi-VN');
 const getFb       = () => (+$('pFb').value       || 0.15) / 100;
 const getFs       = () => getFb() + 0.001;
+const getLoanRate = () => (+($('pLoanRate')?.value) || 13) / 100;   // lãi vay %/năm → tỷ lệ
+const getAdvRate  = () => (+($('pAdvRate')?.value)  || 13) / 100;   // lãi ứng trước %/năm → tỷ lệ
 const getMaxLoan  = () => +($('pMaxLoan')?.value)   || 81e9;
 const fmtPct = n => (n==null || isNaN(n)) ? '—' : (n*100).toFixed(2) + '%';
 const fmtNum = n => (n==null || isNaN(n)) ? '—' : Math.round(n).toLocaleString('vi-VN');
@@ -654,14 +656,15 @@ function recalcDeals() {
     return Math.min(rr, ts * (1 - Rtt));
   };
 
-  // Phí ứng tiền (lãi/năm × số ngày T+ / 360) — dùng chung cho các deal có ứng tiền
-  const adv     = (+$('dAdv')?.value || 0) / 100;          // %/năm → tỷ lệ
+  // Phí ứng tiền (lãi ứng trước %/năm × số ngày T+ / 360) — lãi ứng lấy từ THAM SỐ OCBS
+  const adv     = getAdvRate();                            // lãi ứng trước (tỷ lệ/năm)
   const advDays = (+$('dAdvDays')?.value || 0);            // số ngày chờ tiền bán về
   const pctAdv  = adv * advDays / 360;                     // tỷ lệ phí ứng theo kỳ
 
   // Deal 1 — chuỗi 4 bước: lưu ký A → mua B → bán B → ứng tiền bán B chờ về để rút.
   //   ① Sức mua sinh từ A = dư nợ tối đa debt1 = V_A·rp1 (kẹp theo hạn mức mã A).
-  //   ② Mua cp B: GT mua B = KL_B·giá_B (KL_B=0 → mua tối đa bằng sức mua). Phí mua = GT·fb.
+  //   ② Mua cp B: KL_B tự tính = floor(sức mua / giá_B / 100)·100 (mua tối đa bằng sức mua).
+  //                GT mua B = KL_B·giá_B → phí mua = GT·fb.
   //   ③ B về bán hết (hòa giá mua): GT bán B = GT mua B → phí+thuế bán = GT·fs.
   //   ④ Ứng tiền bán B chờ về (T+advDays): phí ứng = GT·pctAdv.
   //   NET rút = GT bán B − phí mua − phí bán − phí ứng. Dư nợ = GT mua B (CTCK ghi nợ, A vẫn lưu ký).
@@ -675,14 +678,10 @@ function recalcDeals() {
   const lim1 = getStockLimit($('d1Sym').value);
   const cap1 = lim1 != null && buyPower1 > lim1;
   if (cap1) buyPower1 = lim1;
-  // ② Mua cp B: KL_B nhập tay; nếu để 0 → mua tối đa bằng sức mua (làm tròn lô 100).
-  const PB1 = getNumVal('d1PB');                              // giá giao dịch B
-  let NB1 = getNumVal('d1NB');                               // KL B nhập tay
-  if (NB1 <= 0) NB1 = PB1 > 0 ? Math.floor(buyPower1 / PB1 / 100) * 100 : 0;
-  let Vbuy1 = NB1 * PB1;                                     // GT mua B = KL × giá
-  // Kẹp GT mua B không vượt sức mua từ A
-  const overBuy1 = Vbuy1 > buyPower1 + 1;
-  if (overBuy1) { NB1 = PB1 > 0 ? Math.floor(buyPower1 / PB1 / 100) * 100 : 0; Vbuy1 = NB1 * PB1; }
+  // ② Mua cp B: có giá B → tự tính KL tối đa mua được bằng sức mua (làm tròn lô 100).
+  const PB1 = getNumVal('d1PB');                             // giá giao dịch B
+  const NB1 = PB1 > 0 ? Math.floor(buyPower1 / PB1 / 100) * 100 : 0;
+  const Vbuy1 = NB1 * PB1;                                   // GT mua B = KL × giá (≤ sức mua)
   const Vsell1 = Vbuy1;               // ③ GT bán B (hòa giá mua)
   const feeBuy1  = Vbuy1  * fb;        // phí mua B
   const feeSell1 = Vsell1 * fs;        // phí + thuế bán B (fs đã gồm thuế)
@@ -692,7 +691,8 @@ function recalcDeals() {
   showLimitWarn('d1LimitRow', 'd1LimitWarn', cap1, lim1, V1 * rp1);
   $('d1V').textContent      = fmtVND(V1);
   $('d1X').textContent      = fmtVND(buyPower1);
-  $('d1VB').textContent     = fmtVND(Vbuy1) + (NB1 ? ` (${fmtNum(NB1)} cp)` : '');
+  $('d1NB').textContent     = fmtNum(NB1);
+  $('d1VB').textContent     = fmtVND(Vbuy1);
   $('d1FeeBuy').textContent = fmtVND(feeBuy1);
   $('d1FeeSell').textContent= fmtVND(feeSell1);
   $('d1FeeAdv').textContent = fmtVND(feeAdv1);
@@ -1204,8 +1204,8 @@ $('capFilter').oninput = renderCaps;
 $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
-['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant','bQtyChoose',
- 'dR','dRtt','dAdv','dAdvDays','d1N','d1P','d1NB','d1PB','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
+['aCash','aDebt','aInt','pFb','pLoanRate','pAdvRate','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant','bQtyChoose',
+ 'dR','dRtt','dAdvDays','d1N','d1P','d1PB','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 
 ['d1Sym','d1SymB','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));

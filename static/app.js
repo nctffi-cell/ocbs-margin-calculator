@@ -618,10 +618,12 @@ async function onDealSymBlur(e) {
   if (!sym) return;
   const p = await fetchPrice(sym);
   if (!p) return;
-  // Mã B (mã giao dịch): chỉ fill giá B, không đụng r của mã A lưu ký.
-  if (id === 'd1SymB') {
-    setNumVal($('d1PB'), p.price);
-    $('d1PBnote').textContent = `Giá tham chiếu: ${fmtVND(p.price)}`;
+  // Mã B (mã giao dịch của Deal 1/2): chỉ fill giá B, không đụng r của mã A lưu ký.
+  if (id === 'd1SymB' || id === 'd2SymB') {
+    const pbId = id === 'd1SymB' ? 'd1PB' : 'd2PB';
+    const noteId = id === 'd1SymB' ? 'd1PBnote' : 'd2PBnote';
+    setNumVal($(pbId), p.price);
+    $(noteId).textContent = `Giá tham chiếu: ${fmtVND(p.price)}`;
     recalcDeals();
     return;
   }
@@ -701,27 +703,44 @@ function recalcDeals() {
   // Rtt cô lập theo CMRp: tài sản chiết khấu PV1, nợ = debt1.
   $('d1Rtt').textContent = PV1>0 ? fmtPct((PV1-debt1)/PV1) : '—';
 
-  // Deal 2
+  // Deal 2 — bài toán NGƯỢC của Deal 1: muốn rút NET = Y → lưu ký bao nhiêu cp A?
+  //   NET = sức_mua · (1 − fb − fs − pctAdv) → sức_mua cần = Y / (1 − fb − fs − pctAdv).
+  //   V_A cần = sức_mua / r' → N_A = ceil(V_A / P_A / 100)·100 (tròn LÊN để đủ Y).
+  //   Mã B + giá B → KL B mua được = floor(sức_mua_thực / giá_B / 100)·100; chuỗi phí như Deal 1.
   const rp2 = rpEff($('d2Sym').value);
   const Y = getNumVal('d2Y'), P2 = getNumVal('d2P');
-  let Vneed2 = (rp2>0 && (1-fs)>0) ? Y * (1+fb) / (rp2 * (1-fs)) : 0;
-  // Kẹp theo Hạn mức tối đa 1 mã: dư nợ phát sinh = Vreal2·rp2 không vượt limit
-  // → V tối đa = limit/rp2. Nếu Vneed2 vượt ngưỡng này thì không rút đủ Y bằng 1 mã.
+  const kNet = 1 - fb - fs - pctAdv;                          // hệ số NET / sức mua
+  let buyPower2 = kNet > 0 ? Y / kNet : 0;                    // sức mua cần để rút đủ Y
+  // Kẹp theo Hạn mức tối đa 1 mã: sức mua (= dư nợ) không vượt limit của mã A
   const lim2 = getStockLimit($('d2Sym').value);
-  const cap2 = lim2 != null && rp2 > 0 && Vneed2 * rp2 > lim2;
-  if (cap2) Vneed2 = lim2 / rp2;       // V bị kẹp ở mức tạo dư nợ = limit
-  const N2 = P2>0 ? Math.ceil(Vneed2 / P2 / 100) * 100 : 0;
-  let Vreal2 = N2 * P2;
-  let debt2 = Vreal2 * rp2;
-  // N2 làm tròn LÊN có thể đẩy debt vượt limit lần nữa → kẹp lại debt và tiền rút theo limit
-  if (lim2 != null && debt2 > lim2) debt2 = lim2;
-  const X2 = debt2 / (1 + fb);
-  showLimitWarn('d2LimitRow', 'd2LimitWarn', cap2, lim2, (rp2>0 ? Y*(1+fb)/(rp2*(1-fs)) : 0) * rp2);
-  $('d2V').textContent    = fmtVND(Vneed2);
-  $('d2N').textContent    = fmtNum(N2);
-  $('d2Vreal').textContent= fmtVND(Vreal2);
-  $('d2Cash').textContent = fmtVND(X2 * (1 - fs));
-  $('d2Debt').textContent = fmtVND(debt2);
+  const cap2 = lim2 != null && buyPower2 > lim2;
+  if (cap2) buyPower2 = lim2;          // không rút đủ Y bằng 1 mã
+  const Vneed2 = rp2 > 0 ? buyPower2 / rp2 : 0;               // GT lưu ký A cần
+  const N2 = P2 > 0 ? Math.ceil(Vneed2 / P2 / 100) * 100 : 0; // số cp A (tròn lên)
+  const Vreal2 = N2 * P2;                                     // GT lưu ký A thực tế
+  let bpReal2 = Vreal2 * rp2;                                 // sức mua thực sau làm tròn N_A
+  if (lim2 != null && bpReal2 > lim2) bpReal2 = lim2;         // N_A tròn lên không vượt trần
+  // ② Mua cp B từ sức mua thực; KL tự tính (lô 100). ③ bán hòa giá. ④ ứng tiền.
+  const PB2 = getNumVal('d2PB');
+  const NB2 = PB2 > 0 ? Math.floor(bpReal2 / PB2 / 100) * 100 : 0;
+  const Vbuy2 = NB2 * PB2, Vsell2 = Vbuy2;
+  const feeBuy2  = Vbuy2  * fb;
+  const feeSell2 = Vsell2 * fs;
+  const feeAdv2  = Vsell2 * pctAdv;
+  const cash2 = Vsell2 - feeBuy2 - feeSell2 - feeAdv2;        // NET rút thực tế (≳ Y)
+  const debt2 = Vbuy2;                                        // dư nợ phát sinh = GT mua B
+  showLimitWarn('d2LimitRow', 'd2LimitWarn', cap2, lim2, (kNet>0 ? Y/kNet : 0));
+  $('d2BP').textContent     = fmtVND(buyPower2);
+  $('d2V').textContent      = fmtVND(Vneed2);
+  $('d2N').textContent      = fmtNum(N2);
+  $('d2Vreal').textContent  = fmtVND(Vreal2);
+  $('d2NB').textContent     = fmtNum(NB2);
+  $('d2VB').textContent     = fmtVND(Vbuy2);
+  $('d2FeeBuy').textContent = fmtVND(feeBuy2);
+  $('d2FeeSell').textContent= fmtVND(feeSell2);
+  $('d2FeeAdv').textContent = fmtVND(feeAdv2);
+  $('d2Cash').textContent   = fmtVND(cash2);
+  $('d2Debt').textContent   = fmtVND(debt2);
 
   // Deal 3
   const rp3 = rpEff($('d3Sym').value);
@@ -1205,10 +1224,10 @@ $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
 ['aCash','aDebt','aInt','pFb','pLoanRate','pAdvRate','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant','bQtyChoose',
- 'dR','dRtt','dAdvDays','d1N','d1P','d1PB','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
+ 'dR','dRtt','dAdvDays','d1N','d1P','d1PB','d2Y','d2P','d2PB','d3Z','d3P','d4X','d4P','d4Pbuy']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 
-['d1Sym','d1SymB','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
+['d1Sym','d1SymB','d2Sym','d2SymB','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
 $('bSym').addEventListener('change', onBuySymBlur);
 
 // ── Tab 2: Phân bổ bán theo mã ─────────────────────────────
@@ -1249,6 +1268,7 @@ async function prefetchDefaultPrices() {
     { symId: 'd1Sym', priceId: 'd1P', noteId: 'd1Pnote' },
     { symId: 'd1SymB', priceId: 'd1PB', noteId: 'd1PBnote' },
     { symId: 'd2Sym', priceId: 'd2P', noteId: 'd2Pnote' },
+    { symId: 'd2SymB', priceId: 'd2PB', noteId: 'd2PBnote' },
     { symId: 'd3Sym', priceId: 'd3P', noteId: 'd3Pnote' },
     { symId: 'd4Sym', priceId: 'd4P', noteId: 'd4Pnote', buyId: 'd4Pbuy' },
     { symId: 'bSym',  priceId: 'bPrice', noteId: 'bPriceNote' },

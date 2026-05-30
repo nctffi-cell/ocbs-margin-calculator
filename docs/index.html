@@ -252,17 +252,23 @@
       <div class="row"><label>T.lệ margin CP (r)</label><input id="dR" type="number" value="0.5" step="0.05"><span class="note">Mặc định 50%</span></div>
       <div class="row"><label>Rtt mục tiêu sau giao dịch</label><input id="dRtt" type="number" value="0.5" step="0.05"><span class="note">0.5 = IM ban đầu (an toàn)</span></div>
       <div class="row"><label>r' = min(r, 1−Rtt*)</label><div class="calc" id="dRp">0</div><span class="note">Ràng buộc chặt</span></div>
+      <div class="row"><label>% Phí ứng (lãi/năm)</label><input id="dAdv" type="number" value="13" step="0.5" min="0"><span class="note">%/năm — tính theo số ngày/360</span></div>
+      <div class="row"><label>Số ngày ứng (T+)</label><input id="dAdvDays" type="number" value="2" step="1" min="0"><span class="note">T+2 nếu không có lễ/cuối tuần; có thì cộng thêm</span></div>
     </div>
 
     <div class="card">
-      <div class="card-header deal">▶ DEAL 1: Lưu ký N cp → RÚT TỐI ĐA bao nhiêu?</div>
-      <div class="row"><label>Mã CK</label><input id="d1Sym" type="text" value="MWG"><span class="note">Tham khảo</span></div>
+      <div class="card-header deal">▶ DEAL 1: Lưu ký A → mua B → bán B → RÚT NET bao nhiêu?</div>
+      <div class="hint">Quy trình: ① Lưu ký N cp A → sinh sức mua. ② Dùng sức mua mua cp B. ③ B về, bán hết. ④ Ứng tiền bán B chờ về để rút. NET = tiền bán B − phí mua − phí bán − phí ứng.</div>
+      <div class="row"><label>Mã CK (A)</label><input id="d1Sym" type="text" value="MWG"><span class="note">TS lưu ký, sinh sức mua</span></div>
       <div class="row"><label>Số CP lưu ký (N)</label><input id="d1N" type="text" inputmode="numeric" data-num value="1000000"><span></span></div>
-      <div class="row"><label>Giá CP (đ)</label><input id="d1P" type="text" inputmode="numeric" data-num value="86000"><span class="note" id="d1Pnote"></span></div>
+      <div class="row"><label>Giá CP A (đ)</label><input id="d1P" type="text" inputmode="numeric" data-num value="86000"><span class="note" id="d1Pnote"></span></div>
       <div class="row"><label>V = N × P</label><div class="calc" id="d1V">0</div><span></span></div>
-      <div class="row"><label>GT lệnh mua/bán</label><div class="calc" id="d1X">0</div><span class="note">= V·r'/(1+f_b)</span></div>
-      <div class="row"><label><b>▶ TIỀN RÚT TỐI ĐA</b></label><div class="calc star" id="d1Cash">0</div><span class="note">= X·(1−f_s)</span></div>
-      <div class="row"><label>Dư nợ còn lại</label><div class="calc" id="d1Debt">0</div><span class="note">= X·(1+f_b)</span></div>
+      <div class="row"><label>Sức mua = GT mua B</label><div class="calc" id="d1X">0</div><span class="note">= V·r' (kẹp hạn mức A)</span></div>
+      <div class="row"><label>② Phí mua B</label><div class="calc" id="d1FeeBuy">0</div><span class="note">= GT mua B · f_b</span></div>
+      <div class="row"><label>③ Phí + thuế bán B</label><div class="calc" id="d1FeeSell">0</div><span class="note">= GT bán B · f_s</span></div>
+      <div class="row"><label>④ Phí ứng tiền</label><div class="calc" id="d1FeeAdv">0</div><span class="note">= GT bán B · adv·ngày/360</span></div>
+      <div class="row"><label><b>▶ TIỀN RÚT NET</b></label><div class="calc star" id="d1Cash">0</div><span class="note">= GT bán B − 3 loại phí</span></div>
+      <div class="row"><label>Dư nợ còn lại</label><div class="calc" id="d1Debt">0</div><span class="note">CTCK ghi nợ, A vẫn lưu ký</span></div>
       <div class="row" id="d1LimitRow" style="display:none"><label style="color:#c0392b">⚠️ Hạn mức/mã</label><div class="calc" id="d1LimitWarn" style="color:#c0392b;font-weight:600"></div><span class="note">Đã chạm trần — kết quả đã kẹp</span></div>
       <div class="row"><label>Rtt verify</label><div class="calc" id="d1Rtt">—</div><span></span></div>
     </div>

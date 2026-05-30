@@ -647,25 +647,42 @@ function recalcDeals() {
     return Math.min(rr, ts * (1 - Rtt));
   };
 
-  // Deal 1
+  // Phí ứng tiền (lãi/năm × số ngày T+ / 360) — dùng chung cho các deal có ứng tiền
+  const adv     = (+$('dAdv')?.value || 0) / 100;          // %/năm → tỷ lệ
+  const advDays = (+$('dAdvDays')?.value || 0);            // số ngày chờ tiền bán về
+  const pctAdv  = adv * advDays / 360;                     // tỷ lệ phí ứng theo kỳ
+
+  // Deal 1 — chuỗi 4 bước: lưu ký A → mua B → bán B → ứng tiền bán B chờ về để rút.
+  //   ① Sức mua sinh từ A = dư nợ tối đa debt1 = V_A·rp1 (kẹp theo hạn mức mã A).
+  //   ② Mua B bằng toàn bộ sức mua: GT mua B = debt1 → phí mua  = debt1·fb.
+  //   ③ B về bán hết (giả định hòa giá): GT bán B = debt1 → phí+thuế bán = debt1·fs.
+  //   ④ Ứng tiền bán B chờ về (T+advDays): phí ứng = debt1·pctAdv.
+  //   NET rút = GT bán B − phí mua − phí bán − phí ứng. Dư nợ giữ nguyên (CTCK ghi nợ, A vẫn lưu ký).
   const sym1 = $('d1Sym').value, ts1 = (sym1 && STATE.master[sym1.toUpperCase()]) ? getTs(sym1) : 1;
   const rp1 = rpEff(sym1);
   const N1 = getNumVal('d1N'), P1 = getNumVal('d1P');
   const V1 = N1 * P1;                  // giá trị danh nghĩa (N×P)
   const PV1 = V1 * ts1;                // giá trị tài sản đã chiết khấu
-  let X1 = V1 * rp1 / (1 + fb);
-  let debt1 = X1 * (1 + fb);           // = V1 · rp1
+  let debt1 = V1 * rp1;                // sức mua = dư nợ tối đa từ A
   // Kẹp theo Hạn mức tối đa 1 mã: dư nợ phát sinh không vượt limit của mã d1Sym
   const lim1 = getStockLimit($('d1Sym').value);
   const cap1 = lim1 != null && debt1 > lim1;
-  if (cap1) { debt1 = lim1; X1 = lim1 / (1 + fb); }
-  const cash1 = X1 * (1 - fs);
+  if (cap1) debt1 = lim1;
+  const Vbuy1  = debt1;                // ② GT lệnh mua B = toàn bộ sức mua
+  const Vsell1 = Vbuy1;               // ③ GT bán B (giả định hòa giá mua)
+  const feeBuy1  = Vbuy1  * fb;        // phí mua B
+  const feeSell1 = Vsell1 * fs;        // phí + thuế bán B (fs đã gồm thuế)
+  const feeAdv1  = Vsell1 * pctAdv;    // ④ phí ứng tiền bán B chờ về
+  const cash1 = Vsell1 - feeBuy1 - feeSell1 - feeAdv1;   // NET rút được
   showLimitWarn('d1LimitRow', 'd1LimitWarn', cap1, lim1, V1 * rp1);
-  $('d1V').textContent   = fmtVND(V1);
-  $('d1X').textContent   = fmtVND(X1);
-  $('d1Cash').textContent= fmtVND(cash1);
-  $('d1Debt').textContent= fmtVND(debt1);
-  // Rtt cô lập theo CMRp: tài sản chiết khấu PV1, rút hết tiền (cash=0), nợ = debt1.
+  $('d1V').textContent      = fmtVND(V1);
+  $('d1X').textContent      = fmtVND(Vbuy1);
+  $('d1FeeBuy').textContent = fmtVND(feeBuy1);
+  $('d1FeeSell').textContent= fmtVND(feeSell1);
+  $('d1FeeAdv').textContent = fmtVND(feeAdv1);
+  $('d1Cash').textContent   = fmtVND(cash1);
+  $('d1Debt').textContent   = fmtVND(debt1);
+  // Rtt cô lập theo CMRp: tài sản chiết khấu PV1, nợ = debt1.
   $('d1Rtt').textContent = PV1>0 ? fmtPct((PV1-debt1)/PV1) : '—';
 
   // Deal 2
@@ -1172,7 +1189,7 @@ $('capExch').oninput   = renderCaps;
 
 // ── Wire general inputs ────────────────────────────────────
 ['aCash','aDebt','aInt','pFb','pCall','pForce','pMaxLoan','bSym','bPrice','bQtyWant','bQtyChoose',
- 'dR','dRtt','d1N','d1P','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
+ 'dR','dRtt','dAdv','dAdvDays','d1N','d1P','d2Y','d2P','d3Z','d3P','d4X','d4P','d4Pbuy']
 .forEach(id => { const el = $(id); if (el) el.addEventListener('input', recalcAll); });
 
 ['d1Sym','d2Sym','d3Sym','d4Sym'].forEach(id => $(id).addEventListener('change', onDealSymBlur));
